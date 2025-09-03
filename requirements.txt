@@ -1,0 +1,5 @@
+weaviate-client>=4.16,<5
+sentence-transformers==2.2.2
+PyMuPDF==1.23.9
+python-docx==0.8.11
+tqdm
