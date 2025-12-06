@@ -1,0 +1,27 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.db
+*.sqlite
+.env
+.env.local
+.venv/
+venv/
+.DS_Store
+
+# Large model and vector data
+models/
+weaviate_data/
+
+# App UI dependencies and build artifacts
+app-ui/node_modules/
+app-ui/dist/
+app-ui/.parcel-cache/
+
+# Binary model artifacts
+*.safetensors
+*.onnx
+*.h5
+*.ot

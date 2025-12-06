@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Semantic File Search</title>
+  <style>
+    body {
+      font-family: Arial;
+      margin: 0;
+      background: #111;
+      color: #eee;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 30px;
+    }
+    input {
+      width: 60%;
+      padding: 12px;
+      font-size: 18px;
+      border-radius: 6px;
+      border: none;
+      margin-bottom: 20px;
+    }
+    button {
+      padding: 10px 24px;
+      font-size: 16px;
+      background: #0078ff;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .result {
+      background: #222;
+      padding: 15px;
+      width: 70%;
+      margin-top: 15px;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Semantic File Search</h2>
+
+  <input id="query" type="text" placeholder="Search anything..." />
+  <button onclick="doSearch()">Search</button>
+
+  <div id="results"></div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
