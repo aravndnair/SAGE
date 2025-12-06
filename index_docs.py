@@ -1,180 +1,141 @@
 import os
-import warnings
-from pathlib import Path
-from tqdm import tqdm
+import time
 import sqlite3
+from tqdm import tqdm
+import glob
+import winreg
 import weaviate
-from weaviate.classes.data import DataObject
-from weaviate.classes.config import Property, DataType, Configure
-from weaviate.classes.query import Filter
+import fitz  # PyMuPDF for PDFs
+import docx  # python-docx
 from sentence_transformers import SentenceTransformer
-import fitz
-import docx
 
-warnings.filterwarnings("ignore", category=DeprecationWarning)
+COLLECTION_NAME = "Documents"
+DB_PATH = "index_state.db"
 
-ROOTS = [
-    Path(r"C:\Vscode\semantic_file_search\docs"),
+client = weaviate.Client("http://localhost:8080")
+model = SentenceTransformer("all-MiniLM-L6-v2")
+
+
+# --- Load Only Real Text ---
+def load_text(path):
+    ext = path.lower().split(".")[-1]
+
+    try:
+        if ext == "txt":
+            return open(path, "r", encoding="utf-8", errors="ignore").read()
+
+        elif ext == "pdf":
+            doc = fitz.open(path)
+            text = "\n".join(page.get_text() for page in doc)
+            doc.close()
+            return text
+
+        elif ext == "docx":
+            document = docx.Document(path)
+            return "\n".join(p.text for p in document.paragraphs)
+
+        else:
+            return ""
+    except:
+        return ""
+
+
+# --- Local DB for timestamps ---
+conn = sqlite3.connect(DB_PATH)
+cursor = conn.cursor()
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS indexed_files (
+    path TEXT PRIMARY KEY,
+    modified REAL
+)
+""")
+conn.commit()
+
+
+def get_modified(path):
+    return os.path.getmtime(path)
+
+
+# --- Create Weaviate Schema if not exists ---
+def ensure_schema():
+    schema = client.schema.get()
+    if COLLECTION_NAME not in [c["class"] for c in schema.get("classes", [])]:
+        print("📦 Creating Weaviate collection...")
+        client.schema.create_class({
+            "class": COLLECTION_NAME,
+            "properties": [
+                {"name": "file", "dataType": ["text"]},
+                {"name": "path", "dataType": ["text"]},
+                {"name": "content", "dataType": ["text"]}
+            ]
+        })
+
+
+# --- Index into Weaviate ---
+def index_file(path):
+    text = load_text(path).strip()
+    if not text:
+        return
+
+    embedding = model.encode(text).tolist()
+    client.data_object.create({
+        "file": os.path.basename(path),
+        "path": os.path.abspath(path),
+        "content": text[:5000]  # store 5K chars max
+    }, COLLECTION_NAME, vector=embedding)
+
+
+# --- Detect Windows user file locations ---
+def get_folder(name):
+    try:
+        key = winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders"
+        )
+        val, _ = winreg.QueryValueEx(key, name)
+        return val
+    except:
+        return None
+
+
+SEARCH_DIRS = [
+    get_folder("Personal"),  # Documents
+    get_folder("Desktop"),  # Desktop
+    "docs"  # Local test folder
 ]
 
-MODEL_DIR = Path("./models/all-MiniLM-L6-v2")
-COLLECTION = "FileChunks"
-STATE_DB = "index_state.db"
+ALLOWED_EXT = (".txt", ".pdf", ".docx")
 
-CHUNK_SIZE = 600
-OVERLAP = 120
 
-def init_db():
-    conn = sqlite3.connect(STATE_DB)
-    c = conn.cursor()
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS files (
-            path TEXT PRIMARY KEY,
-            mtime REAL,
-            size INTEGER
-        )
-    """)
+# --- Main Process ---
+def scan_and_index():
+    ensure_schema()
+    files = []
+
+    print("🔍 Searching folders:")
+    for d in SEARCH_DIRS:
+        if d and os.path.exists(d):
+            print("  •", d)
+            for ext in ALLOWED_EXT:
+                files.extend(glob.glob(os.path.join(d, f"**/*{ext}"), recursive=True))
+
+    print(f"\n📄 Found {len(files)} file(s) to check\n")
+
+    updated = 0
+    for file in tqdm(files):
+        mtime = get_modified(file)
+        cursor.execute("SELECT modified FROM indexed_files WHERE path=?", (file,))
+        row = cursor.fetchone()
+
+        if not row or row[0] != mtime:
+            index_file(file)
+            cursor.execute("REPLACE INTO indexed_files VALUES (?, ?)", (file, mtime))
+            updated += 1
+
     conn.commit()
-    return conn
+    print(f"\n🚀 Indexed {updated} new/changed file(s)")
 
-def extract_pdf(path: Path) -> str:
-    try:
-        text = ""
-        with fitz.open(str(path)) as doc:
-            for page in doc:
-                text += page.get_text()
-        return text
-    except:
-        return ""
 
-def extract_docx(path: Path) -> str:
-    try:
-        d = docx.Document(str(path))
-        return "\n".join(p.text for p in d.paragraphs)
-    except:
-        return ""
-
-def read_file(path: Path) -> str:
-    ext = path.suffix.lower()
-    try:
-        if ext == ".pdf":
-            return extract_pdf(path)
-        if ext == ".docx":
-            return extract_docx(path)
-        if ext == ".txt":
-            for enc in ("utf-8", "utf-16", "latin-1"):
-                try:
-                    return path.read_text(encoding=enc)
-                except:
-                    pass
-            return path.read_text(errors="ignore")
-    except:
-        return ""
-    return ""
-
-def chunk_text(text, size, overlap):
-    chunks = []
-    i = 0
-    step = max(1, size - overlap)
-    while i < len(text):
-        chunk = text[i:i + size].strip()
-        if chunk:
-            chunks.append(chunk)
-        i += step
-    return chunks
-
-if __name__ == "__main__":
-    print("🧠 Loading local model...")
-    model = SentenceTransformer(str(MODEL_DIR))
-
-    print("🔌 Connecting to Weaviate...")
-    client = weaviate.connect_to_local(skip_init_checks=True)
-
-    print("📦 Checking collection...")
-    try:
-        coll = client.collections.get(COLLECTION)
-    except:
-        coll = client.collections.create(
-            name=COLLECTION,
-            properties=[
-                Property(name="path", data_type=DataType.TEXT),
-                Property(name="filename", data_type=DataType.TEXT),
-                Property(name="chunk", data_type=DataType.TEXT),
-                Property(name="chunk_index", data_type=DataType.INT),
-            ],
-            vector_config=Configure.Vectors.self_provided(),
-        )
-
-    conn = init_db()
-    c = conn.cursor()
-
-    print("📄 Scanning files...")
-    current_files = []
-    for root in ROOTS:
-        if root.exists():
-            current_files.extend(
-                p for p in root.rglob("*")
-                if p.suffix.lower() in {".pdf", ".docx", ".txt"}
-            )
-    print(f"📊 Found {len(current_files)} files")
-
-    # Remove deleted files
-    c.execute("SELECT path FROM files")
-    known_paths = {row[0] for row in c.fetchall()}
-    disk_paths = {str(p.resolve()) for p in current_files}
-    deleted = known_paths - disk_paths
-
-    for p in deleted:
-        coll.data.delete_many(where=Filter.by_property("path").equal(p))
-        c.execute("DELETE FROM files WHERE path=?", (p,))
-    if deleted:
-        conn.commit()
-
-    print("⚙️ Indexing changed/new files...")
-    changed = 0
-
-    for file_path in tqdm(current_files, desc="Indexing"):
-        path = str(file_path.resolve())
-        mtime = round(file_path.stat().st_mtime, 2)
-        size = file_path.stat().st_size
-
-        c.execute("SELECT mtime, size FROM files WHERE path=?", (path,))
-        row = c.fetchone()
-
-        if row and abs(row[0] - mtime) <= 0.01 and row[1] == size:
-            continue  # exact same file → skip
-
-        # Changed or new file
-        changed += 1
-        text = read_file(file_path)
-        if not text:
-            continue
-
-        chunks = chunk_text(text, CHUNK_SIZE, OVERLAP)
-        if not chunks:
-            continue
-
-        coll.data.delete_many(where=Filter.by_property("path").equal(path))
-
-        vectors = model.encode(chunks, show_progress_bar=False)
-        objects = [
-            DataObject(
-                properties={
-                    "path": path,
-                    "filename": file_path.name,
-                    "chunk": chunk,
-                    "chunk_index": i,
-                },
-                vector=vec.tolist(),
-            )
-            for i, (chunk, vec) in enumerate(zip(chunks, vectors))
-        ]
-        coll.data.insert_many(objects)
-
-        c.execute("REPLACE INTO files(path,mtime,size) VALUES(?,?,?)",
-                  (path, mtime, size))
-        conn.commit()
-
-    conn.close()
-    client.close()
-    print(f"🚀 Done — Updated {changed} file(s)")
+scan_and_index()
+conn.close()
+print("🎯 Done!")

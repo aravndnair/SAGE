@@ -1,51 +1,36 @@
-async function doSearch() {
-  const q = document.getElementById("query").value.trim();
-  if (!q) return;
+document.getElementById("searchBtn").addEventListener("click", () => {
+    const query = document.getElementById("query").value.trim();
+    if (query) {
+        document.getElementById("results").innerHTML = "Searching...";
+        window.sageAPI.search(query);
+    }
+});
 
-  const resBox = document.getElementById("results");
-  resBox.innerHTML = "Searching...";
+window.sageAPI.onResult((data) => {
+    const resBox = document.getElementById("results");
 
-  try {
-    const response = await fetch("http://127.0.0.1:8000/search", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ query: q, snippets: 3 })
-    });
-
-    const data = await response.json();
-
-    // New format: { results: [ { file, path, similarity, snippets }, ... ] }
-    if (!data.results || data.results.length === 0) {
-      resBox.innerHTML = "<p>No results.</p>";
-      return;
+    if (!data || !Array.isArray(data.results) || data.results.length === 0) {
+        resBox.innerHTML = `<p>No results found.</p>`;
+        return;
     }
 
     let html = "";
 
-    for (const result of data.results) {
-      html += `
-        <div class="result">
-          <h3>${result.file} — <span>${result.similarity}% match</span></h3>
-          <p><b>Path:</b> ${result.path}</p>
-          <ul>
-      `;
+    for (const r of data.results) {
+        // similarity is ALREADY 0–100 from Python
+        const sim = (typeof r.similarity === "number")
+            ? r.similarity.toFixed(2)
+            : r.similarity;
 
-      for (const snip of result.snippets) {
-        html += `<li>${snip.text}</li>`;
-      }
-
-      html += `
-          </ul>
-        </div>
-      `;
+        html += `
+        <div class="result-card">
+            <h3>${r.file} — ${sim}% match</h3>
+            <p class="path">${r.path}</p>
+            <ul>
+                <li>${r.snippet}</li>
+            </ul>
+        </div>`;
     }
 
     resBox.innerHTML = html;
-
-  } catch (err) {
-    console.error(err);
-    resBox.innerHTML = `<p style="color:red;">Error connecting to backend</p>`;
-  }
-}
+});
