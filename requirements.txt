@@ -1,8 +1,26 @@
-weaviate-client==4.10.2
+# --- CORE AI + EMBEDDINGS ---
 sentence-transformers==2.6.1
-transformers==4.40.1
-torch==2.3.1+cpu
-numpy<2
-PyMuPDF==1.23.7
-python-docx==0.8.11
-tqdm
+transformers==4.41.2
+torch==2.2.2
+numpy==1.26.4
+
+# --- WEAVIATE SEARCH DB ---
+weaviate-client==3.25.4   # v3 client — stable
+grpcio==1.62.2            # required for fast vector ops
+
+# --- WATCHDOG (FILE CHANGE MONITORING) ---
+watchdog==4.0.0
+
+# --- DOCX + PDF PARSING ---
+python-docx==1.1.0
+PyMuPDF==1.23.26          # best PDF extractor
+pypdf==4.2.0
+
+# --- FASTAPI BACKEND (for UI / Electron / HTTP services) ---
+fastapi==0.110.0
+uvicorn==0.29.0
+
+# --- UTILS ---
+tqdm==4.66.2
+requests==2.31.0
+python-multipart==0.0.9
