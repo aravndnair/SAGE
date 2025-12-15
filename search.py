@@ -1,82 +1,60 @@
-# search.py
 import os
-from pathlib import Path
-import argparse
+import re
+import requests
 import weaviate
-from weaviate.classes.query import MetadataQuery
 
-# Enforce offline behavior for Hugging Face/Transformers
-os.environ.setdefault("HF_HUB_OFFLINE", "1")
-os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+CLASS_NAME = "Documents"
+EMBED_SERVER_URL = "http://127.0.0.1:9000"
 
-from sentence_transformers import SentenceTransformer
+_client = None
 
-COLLECTION = "FileChunks"
+def get_client():
+    global _client
+    if _client is None:
+        _client = weaviate.connect_to_local()
+    return _client
 
-# Load model strictly from local folder
-MODEL_DIR = Path("./models/all-MiniLM-L6-v2")
-assert MODEL_DIR.exists(), f"Model directory not found: {MODEL_DIR}. Please download the model locally first."
+def embed_query(text: str):
+    r = requests.post(
+        f"{EMBED_SERVER_URL}/embed",
+        json={"texts": [text]},
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.json()["vectors"][0]
 
+def tokenize(text: str):
+    return set(re.findall(r"[a-zA-Z]{3,}", text.lower()))
 
-def main():
-    parser = argparse.ArgumentParser(description="Semantic file search (returns the best matching file).")
-    parser.add_argument("query", type=str, help="Your search query")
-    parser.add_argument("-k", "--chunks", type=int, default=12, help="How many top chunks to consider for scoring")
-    parser.add_argument("-s", "--snippets", type=int, default=3, help="How many snippets to display from the best file")
-    args = parser.parse_args()
+def semantic_search(query: str, top_k: int = 5):
+    vec = embed_query(query)
+    client = get_client()
+    col = client.collections.get(CLASS_NAME)
 
-    # Load the model from disk only
-    model = SentenceTransformer(str(MODEL_DIR))
+    raw = col.query.near_vector(near_vector=vec, limit=top_k * 10)
 
-    client = weaviate.connect_to_local()
-    try:
-        coll = client.collections.get(COLLECTION)
+    q_tokens = tokenize(query)
+    results = {}
 
-        # Vectorize query
-        qvec = model.encode(args.query).tolist()
+    for obj in raw.objects:
+        p = obj.properties
+        chunk = p["chunk"]
+        folders = p.get("folders", "")
+        path = p["path"]
 
-        # Retrieve more chunks to score files accurately
-        res = coll.query.near_vector(
-            near_vector=qvec,
-            limit=args.chunks,
-            return_properties=["path", "filename", "chunk", "chunk_index"],
-            return_metadata=MetadataQuery(distance=True),
-        )
+        score = 1.0 - (obj.metadata.distance or 1.0)
 
-        if not res.objects:
-            print("No results found.")
-            return
+        # Folder-name boost
+        folder_tokens = tokenize(folders)
+        if q_tokens & folder_tokens:
+            score += 0.4
 
-        # Aggregate by file using inverse-distance scoring
-        from collections import defaultdict
-        file_scores = defaultdict(float)
-        file_chunks = defaultdict(list)
-        eps = 1e-6
+        if path not in results or score > results[path]["similarity"]:
+            results[path] = {
+                "file": os.path.basename(path),
+                "path": path,
+                "snippet": chunk,
+                "similarity": round(score, 4),
+            }
 
-        for obj in res.objects:
-            fname = obj.properties["filename"]
-            file_scores[fname] += 1.0 / (obj.metadata.distance + eps)
-            file_chunks[fname].append(obj)
-
-        # Pick best file
-        best_file = max(file_scores, key=file_scores.get)
-        best_file_objs = sorted(file_chunks[best_file], key=lambda o: o.metadata.distance)
-        best_path = best_file_objs[0].properties["path"]
-
-        # Output
-        print("Best Match:")
-        print(f"File: {best_file}")
-        print(f"Path: {best_path}\n")
-
-        print("Relevant Snippets:")
-        for i, obj in enumerate(best_file_objs[:args.snippets], 1):
-            snippet = obj.properties["chunk"].replace("\n", " ").strip()
-            score = 1.0 / (obj.metadata.distance + eps)
-            print(f"  {i}. (score: {score:.2f}) \"{snippet[:300]}\"")
-
-    finally:
-        client.close()
-
-
-if __name__ == "__main__":
-    main()
+    return sorted(results.values(), key=lambda x: x["similarity"], reverse=True)[:top_k]
