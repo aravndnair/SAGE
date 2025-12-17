@@ -1,60 +1,80 @@
-import os
-import re
-import requests
+from sentence_transformers import SentenceTransformer
 import weaviate
+import sqlite3
+import os
+from typing import List, Optional
+
+# ---------------- CONFIG ----------------
 
 CLASS_NAME = "Documents"
-EMBED_SERVER_URL = "http://127.0.0.1:9000"
+EMBED_MODEL = "all-MiniLM-L6-v2"
+INDEX_DB = "index_state.db"
 
-_client = None
+# --------------------------------------
 
-def get_client():
-    global _client
-    if _client is None:
-        _client = weaviate.connect_to_local()
-    return _client
 
-def embed_query(text: str):
-    r = requests.post(
-        f"{EMBED_SERVER_URL}/embed",
-        json={"texts": [text]},
-        timeout=30,
+# -------- INIT (loaded once) --------
+
+model = SentenceTransformer(EMBED_MODEL)
+client = weaviate.connect_to_local()
+collection = client.collections.get(CLASS_NAME)
+
+# -----------------------------------
+
+
+def load_db_roots() -> List[str]:
+    conn = sqlite3.connect(INDEX_DB)
+    cur = conn.cursor()
+    cur.execute("SELECT path FROM user_roots")
+    roots = [row[0] for row in cur.fetchall()]
+    conn.close()
+    return roots
+
+
+def semantic_search(
+    query: str,
+    top_k: int = 5,
+    roots: Optional[List[str]] = None
+):
+    """
+    Semantic search with DB-root defaults.
+    """
+
+    # ---- Resolve effective roots ----
+    if roots is None:
+        roots = load_db_roots()
+
+    norm_roots = [os.path.normpath(r) for r in roots] if roots else None
+
+    query_vector = model.encode(query).tolist()
+
+    results = collection.query.near_vector(
+        near_vector=query_vector,
+        limit=top_k * 5,
+        return_metadata=["distance"]
     )
-    r.raise_for_status()
-    return r.json()["vectors"][0]
 
-def tokenize(text: str):
-    return set(re.findall(r"[a-zA-Z]{3,}", text.lower()))
+    output = []
 
-def semantic_search(query: str, top_k: int = 5):
-    vec = embed_query(query)
-    client = get_client()
-    col = client.collections.get(CLASS_NAME)
+    for obj in results.objects:
+        path = obj.properties.get("path", "")
+        norm_path = os.path.normpath(path)
 
-    raw = col.query.near_vector(near_vector=vec, limit=top_k * 10)
+        # ---- Root scoping ----
+        if norm_roots:
+            if not any(norm_path.startswith(r) for r in norm_roots):
+                continue
 
-    q_tokens = tokenize(query)
-    results = {}
+        distance = obj.metadata.distance
+        similarity = round(1 - distance, 4)
 
-    for obj in raw.objects:
-        p = obj.properties
-        chunk = p["chunk"]
-        folders = p.get("folders", "")
-        path = p["path"]
+        output.append({
+            "file": obj.properties.get("file"),
+            "path": path,
+            "snippet": obj.properties.get("chunk", "")[:300],
+            "distance": round(distance, 4),
+            "similarity": similarity
+        })
 
-        score = 1.0 - (obj.metadata.distance or 1.0)
-
-        # Folder-name boost
-        folder_tokens = tokenize(folders)
-        if q_tokens & folder_tokens:
-            score += 0.4
-
-        if path not in results or score > results[path]["similarity"]:
-            results[path] = {
-                "file": os.path.basename(path),
-                "path": path,
-                "snippet": chunk,
-                "similarity": round(score, 4),
-            }
-
-    return sorted(results.values(), key=lambda x: x["similarity"], reverse=True)[:top_k]
+    output.sort(key=lambda x: x["distance"])
+    return output[:top_k]
