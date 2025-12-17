@@ -16,3 +16,6 @@ Thumbs.db
 
 # ---- Logs ----
 *.log
+seed_roots.py
+weaviate_data/
+indexer_core.py 
