@@ -18,4 +18,9 @@ Thumbs.db
 *.log
 seed_roots.py
 weaviate_data/
-indexer_core.py 
+indexer_core.py
+
+# ---- Node / Frontend ----
+node_modules/
+app-ui/node_modules/
+app-ui/dist/ 

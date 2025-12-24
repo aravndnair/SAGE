@@ -6,7 +6,7 @@ import '../theme/theme.css';
 const BASE_URL = "http://127.0.0.1:8000";
 
 export default function Settings() {
-  const { setScreen, routes, saveRoutes, setPendingRoutes } = useApp();
+  const { setScreen, saveRoutes, setPendingRoutes } = useApp();
   const [localRoutes, setLocalRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAcknowledgement, setShowAcknowledgement] = useState(false);
@@ -17,11 +17,9 @@ export default function Settings() {
 
   const loadRoutes = async () => {
     try {
-      // Backend is the single source of truth
       const fetchedRoutes = await getRoots();
       const uniqueRoutes = [...new Set(fetchedRoutes || [])];
       setLocalRoutes(uniqueRoutes);
-      // Sync to localStorage
       saveRoutes(uniqueRoutes);
     } catch (error) {
       console.error('Failed to load routes:', error);
@@ -39,7 +37,6 @@ export default function Settings() {
     if (window.electron && window.electron.selectFolder) {
       const folderPath = await window.electron.selectFolder();
       if (folderPath) {
-        // Check for duplicate before adding
         if (localRoutes.includes(folderPath)) {
           alert('This folder is already added');
           return;
@@ -49,24 +46,9 @@ export default function Settings() {
     }
   };
 
-  const handleRemove = async (index) => {
-    const routeToRemove = localRoutes[index];
-    try {
-      // Remove from backend
-      await fetch(`${BASE_URL}/roots/remove`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: routeToRemove })
-      });
-      
-      // Reload from backend (single source of truth)
-      const updatedRoutes = await getRoots();
-      setLocalRoutes(updatedRoutes);
-      saveRoutes(updatedRoutes);
-    } catch (error) {
-      console.error('Failed to remove route:', error);
-      alert('Failed to remove route. Please try again.');
-    }
+  const handleRemove = (index) => {
+    const newRoutes = localRoutes.filter((_, i) => i !== index);
+    setLocalRoutes(newRoutes);
   };
 
   const handleSave = () => {
@@ -75,7 +57,6 @@ export default function Settings() {
       return;
     }
     
-    // Store pending routes and show acknowledgement
     setPendingRoutes(localRoutes);
     setShowAcknowledgement(true);
   };
@@ -85,106 +66,115 @@ export default function Settings() {
   }
 
   return (
-    <div className="screen" style={{ justifyContent: 'flex-start', paddingTop: 'var(--spacing-3xl)' }}>
-      {/* Header */}
-      <div style={{ 
-        width: '100%', 
-        maxWidth: '600px', 
-        padding: '0 var(--spacing-xl)',
-        marginBottom: 'var(--spacing-xl)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--spacing-md)', marginBottom: 'var(--spacing-lg)' }}>
-          <button className="btn-icon" onClick={() => setScreen(SCREENS.SEARCH)} title="Back">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M15 10H5M5 10l4 4M5 10l4-4" />
+    <div className="settings-screen">
+      {/* Top Navigation Bar */}
+      <div className="settings-top-nav">
+        <div className="settings-nav-logo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="#007aff">
+            <path d="M12 2L2 7v10c0 5.5 3.8 9.7 9 11 5.2-1.3 9-5.5 9-11V7l-10-5z"/>
+          </svg>
+          <span>sage</span>
+        </div>
+        <div className="settings-nav-icons">
+          <button className="settings-nav-icon-btn">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M10 3c-3.9 0-7 3.1-7 7s3.1 7 7 7 7-3.1 7-7-3.1-7-7-7zm0 2c2.8 0 5 2.2 5 5s-2.2 5-5 5-5-2.2-5-5 2.2-5 5-5z"/>
+              <circle cx="10" cy="8" r="1.5"/>
+              <path d="M10 11c-1.7 0-3 1-3 2h6c0-1-1.3-2-3-2z"/>
             </svg>
           </button>
-          <h2 className="text-2xl" style={{ color: 'var(--color-text-primary)' }}>
-            Settings
-          </h2>
+        </div>
+      </div>
+
+      {/* Main Content Container */}
+      <div className="settings-main-container">
+        {/* Header with back button */}
+        <div className="settings-header-row">
+          <button className="settings-circle-back" onClick={() => setScreen(SCREENS.SEARCH)}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 12L6 8l4-4" />
+            </svg>
+          </button>
+          <h1 className="settings-main-title">Settings</h1>
         </div>
 
-        <p className="text-base" style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--spacing-xl)' }}>
-          Manage directory routes (folders) that SAGE can access
-        </p>
+        {/* Content Cards */}
+        <div className="settings-cards-container">
+          {/* Manage Roots Card */}
+          <div className="settings-card">
+            <h2 className="settings-card-title">Manage Roots</h2>
+            <p className="settings-card-description">
+              Select the folders SAGE can access to perform semantic searches. For privacy, SAGE only scans directories you explicitly add.
+            </p>
 
-        {/* Routes List */}
-        {loading ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: 'var(--spacing-2xl)' }}>
-            <div className="loader" />
+            <div className="settings-roots-section">
+              <label className="settings-roots-label">Selected Roots</label>
+              
+              {loading ? (
+                <div style={{ padding: '2rem', textAlign: 'center' }}>
+                  <div className="loader" />
+                </div>
+              ) : (
+                <>
+                  {localRoutes.length > 0 ? (
+                    <div className="settings-roots-box">
+                      {localRoutes.map((route, index) => (
+                        <div key={index} className="settings-root-row">
+                          <span className="settings-root-text">{route}</span>
+                          <button
+                            className="settings-delete-btn"
+                            onClick={() => handleRemove(index)}
+                            title="Remove"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                              <path d="M5.5 3h5v1h-5V3zm-1 2h8v8a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1V5zm2 1v6h1V6h-1zm3 0v6h1V6h-1z"/>
+                            </svg>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="settings-empty-box">
+                      <p>No folders selected yet</p>
+                    </div>
+                  )}
+                </>
+              )}
+              
+              <button 
+                className="settings-add-btn" 
+                onClick={handleSelectFolder}
+                disabled={localRoutes.length >= 5}
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M8 3v10M3 8h10" />
+                </svg>
+                Add Roots
+              </button>
+            </div>
           </div>
-        ) : (
-          <div style={{ marginBottom: 'var(--spacing-xl)' }}>
-            {localRoutes.length > 0 ? (
-              <div className="stagger-animation" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-                {localRoutes.map((route, index) => (
-                  <div
-                    key={index}
-                    className="glass-card"
-                    style={{
-                      padding: 'var(--spacing-md)',
-                      display: 'flex',
-                      justifyContent: 'space-between',
-                      alignItems: 'center'
-                    }}
-                  >
-                    <span style={{ 
-                      fontSize: 'var(--font-size-sm)', 
-                      color: 'var(--color-text-primary)',
-                      flex: 1,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap'
-                    }}>
-                      {route}
-                    </span>
-                    <button
-                      onClick={() => handleRemove(index)}
-                      style={{
-                        color: 'var(--color-danger)',
-                        fontSize: 'var(--font-size-sm)',
-                        padding: 'var(--spacing-xs) var(--spacing-md)',
-                        fontWeight: 'var(--font-weight-medium)'
-                      }}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="glass-card" style={{ padding: 'var(--spacing-xl)', textAlign: 'center' }}>
-                <p className="text-base" style={{ color: 'var(--color-text-tertiary)' }}>
-                  No routes configured
-                </p>
-              </div>
-            )}
-          </div>
-        )}
 
-        {/* Action Buttons */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-md)' }}>
-          <button
-            className="btn-secondary"
-            onClick={handleSelectFolder}
-            disabled={localRoutes.length >= 5}
-            style={{ width: '100%' }}
-          >
-            {localRoutes.length >= 5 ? 'Maximum routes reached' : 'Add Folder'}
-          </button>
-          <button
-            className="btn-primary"
-            onClick={handleSave}
-            disabled={localRoutes.length === 0}
-            style={{ width: '100%' }}
-          >
-            Save
-          </button>
+          {/* Save Changes Card */}
+          <div className="settings-card">
+            <h2 className="settings-card-title">Save Changes</h2>
+            <p className="settings-card-description">
+              Apply your changes to the directory settings. You will be prompted to acknowledge privacy terms.
+            </p>
+            
+            <button 
+              className="settings-save-btn" 
+              onClick={handleSave}
+              disabled={localRoutes.length === 0}
+            >
+              Save Settings
+            </button>
+          </div>
         </div>
 
-        <p className="text-sm" style={{ marginTop: 'var(--spacing-md)', textAlign: 'center' }}>
-          {localRoutes.length}/5 routes
-        </p>
+        {/* Footer */}
+        <div className="settings-footer-text">
+          © 2025. All rights reserved by Aravind
+        </div>
       </div>
     </div>
   );
@@ -200,26 +190,20 @@ function Acknowledgement({ onBack }) {
 
     setSaving(true);
     try {
-      // Get current backend routes
       const currentBackendRoutes = await getRoots();
-      
-      // Only add routes that don't already exist in backend
       const newRoutes = pendingRoutes.filter(route => !currentBackendRoutes.includes(route));
       
       for (const route of newRoutes) {
         await apiAddRoute(route);
       }
 
-      // Fetch fresh routes from backend after adding (single source of truth)
       const updatedRoutes = await getRoots();
       saveRoutes(updatedRoutes);
 
-      // Trigger indexing only if we added new routes
       if (newRoutes.length > 0) {
         await triggerIndexing();
       }
 
-      // Navigate back to search
       setScreen(SCREENS.SEARCH);
     } catch (error) {
       console.error('Failed to save routes:', error);
@@ -230,90 +214,57 @@ function Acknowledgement({ onBack }) {
   };
 
   return (
-    <div className="screen">
-      <div className="glass-card" style={{ 
-        maxWidth: '560px', 
-        padding: 'var(--spacing-2xl)',
-        margin: '0 var(--spacing-xl)'
-      }}>
-        <h2 className="text-2xl" style={{ 
-          color: 'var(--color-text-primary)', 
-          marginBottom: 'var(--spacing-lg)',
-          textAlign: 'center'
-        }}>
-          Important Notice
-        </h2>
-
-        <div style={{ 
-          fontSize: 'var(--font-size-base)', 
-          color: 'var(--color-text-secondary)',
-          lineHeight: '1.6',
-          marginBottom: 'var(--spacing-xl)'
-        }}>
-          <p style={{ marginBottom: 'var(--spacing-md)' }}>
-            Please review the following before proceeding:
+    <div className="acknowledgement-screen">
+      <div className="acknowledgement-container">
+        <div className="acknowledgement-card">
+          <h1 className="acknowledgement-title">
+            Your Privacy Matters: Important Acknowledgement
+          </h1>
+          
+          <p className="acknowledgement-subtitle">
+            Please read the following information carefully before proceeding.
           </p>
 
-          <ul style={{ 
-            paddingLeft: 'var(--spacing-lg)', 
-            display: 'flex', 
-            flexDirection: 'column', 
-            gap: 'var(--spacing-md)' 
-          }}>
-            <li>
-              <strong>Privacy First:</strong> SAGE runs completely offline. Your files never leave your device.
-            </li>
-            <li>
-              <strong>Local Processing:</strong> All indexing and searching happens on your machine. No cloud services involved.
-            </li>
-            <li>
-              <strong>Sensitive Files:</strong> Avoid indexing folders containing passwords, private keys, or highly sensitive personal data.
-            </li>
-            <li>
-              <strong>Your Responsibility:</strong> You are responsible for choosing which folders SAGE can access.
-            </li>
-          </ul>
-        </div>
+          <div className="acknowledgement-content">
+            <p className="acknowledgement-paragraph">
+              SAGE is designed with your privacy as its utmost priority. All file processing, 
+              indexing, and semantic analysis occurs exclusively on your local device. We want 
+              to assure you that your files and any data derived from them will *never* leave 
+              your computer. There is no cloud storage, no external servers, and no internet 
+              transmission of your file content.
+            </p>
 
-        <label style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: 'var(--spacing-md)',
-          marginBottom: 'var(--spacing-xl)',
-          cursor: 'pointer',
-          fontSize: 'var(--font-size-base)',
-          color: 'var(--color-text-primary)'
-        }}>
-          <input
-            type="checkbox"
-            checked={acknowledged}
-            onChange={(e) => setAcknowledged(e.target.checked)}
-            style={{ 
-              width: '20px', 
-              height: '20px',
-              cursor: 'pointer',
-              accentColor: 'var(--color-primary)'
-            }}
-          />
-          <span>I acknowledge and understand</span>
-        </label>
+            <p className="acknowledgement-paragraph">
+              You retain full control over which directories SAGE can access. It is crucial that 
+              you carefully select only the folders you wish to make searchable. Please refrain 
+              from adding directories containing highly sensitive or confidential information that 
+              you would not want to be indexed and searched by SAGE, even locally.
+            </p>
 
-        <div style={{ display: 'flex', gap: 'var(--spacing-md)' }}>
+            <p className="acknowledgement-paragraph">
+              While SAGE ensures your data remains offline, the responsibility for securing your 
+              local device and managing access to it remains with you.
+            </p>
+          </div>
+
+          <label className="acknowledgement-checkbox">
+            <input
+              type="checkbox"
+              checked={acknowledged}
+              onChange={(e) => setAcknowledged(e.target.checked)}
+              className="acknowledgement-checkbox-input"
+            />
+            <span className="acknowledgement-checkbox-label">
+              I acknowledge and understand SAGE's privacy policy.
+            </span>
+          </label>
+
           <button
-            className="btn-secondary"
-            onClick={onBack}
-            disabled={saving}
-            style={{ flex: 1 }}
-          >
-            Back
-          </button>
-          <button
-            className="btn-primary"
+            className="acknowledgement-button"
             onClick={handleConfirm}
             disabled={!acknowledged || saving}
-            style={{ flex: 1 }}
           >
-            {saving ? 'Saving...' : 'Confirm'}
+            {saving ? 'Saving...' : 'Save and Continue'}
           </button>
         </div>
       </div>

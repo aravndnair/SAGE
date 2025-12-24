@@ -6,22 +6,9 @@ import '../theme/theme.css';
 export default function Search() {
   const { setScreen, searchQuery, setSearchQuery, searchResults, setSearchResults, isSearching, setIsSearching, routes, userName, saveRoutes } = useApp();
   const [localQuery, setLocalQuery] = useState('');
-  const [greeting, setGreeting] = useState('Hello');
   const [routesLoading, setRoutesLoading] = useState(true);
-  const [suggestionChips] = useState([
-    'Meeting notes',
-    'Financial reports',
-    'Project documentation',
-    'Recent files'
-  ]);
 
   useEffect(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) setGreeting('Good Morning');
-    else if (hour < 18) setGreeting('Good Afternoon');
-    else setGreeting('Good Evening');
-
-    // Load routes from backend (single source of truth)
     loadRoutes();
   }, []);
 
@@ -60,18 +47,13 @@ export default function Search() {
     }
   };
 
-  const handleSuggestionClick = (suggestion) => {
-    setLocalQuery(suggestion);
-    setSearchQuery(suggestion);
-  };
-
   const handleOpenFile = async (filePath) => {
     if (window.electron && window.electron.openFile) {
       await window.electron.openFile(filePath);
     }
   };
 
-  // First-run gate: no routes configured (show loading or empty state)
+  // First-run gate
   if (routesLoading) {
     return (
       <div className="screen">
@@ -109,78 +91,46 @@ export default function Search() {
   }
 
   return (
-    <div className="screen search-gradient" style={{ justifyContent: 'flex-start', paddingTop: 'var(--spacing-3xl)' }}>
-      {/* Header with icons */}
-      <div style={{ 
-        position: 'absolute', 
-        top: 'var(--spacing-lg)', 
-        left: 0, 
-        right: 0, 
-        display: 'flex', 
-        alignItems: 'center', 
-        justifyContent: 'space-between',
-        padding: '0 var(--spacing-xl)'
-      }}>
-        <div style={{ width: '40px' }} /> {/* Spacer */}
-        
-        <h2 className="text-xl" style={{ color: 'white', fontWeight: 'var(--font-weight-bold)', textShadow: '0 2px 8px rgba(0,0,0,0.1)' }}>
-          SAGE
-        </h2>
-
-        <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
-          <button className="btn-icon" onClick={() => setScreen(SCREENS.SETTINGS)} title="Settings">
+    <div className="search-page">
+      {/* Top Navigation Bar */}
+      <div className="search-top-nav">
+        <div className="search-nav-logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="#007aff">
+            <path d="M12 2L2 7v10c0 5.5 3.8 9.7 9 11 5.2-1.3 9-5.5 9-11V7l-10-5z"/>
+          </svg>
+          <span>SAGE</span>
+        </div>
+        <div className="search-nav-icons">
+          <button className="search-nav-icon-btn" onClick={() => setScreen(SCREENS.SETTINGS)} title="Settings">
             <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-              <path d="M10 1v2m0 14v2M4.22 4.22l1.42 1.42m8.48 8.48l1.42 1.42M1 10h2m14 0h2M4.22 15.78l1.42-1.42m8.48-8.48l1.42-1.42" />
+              <circle cx="10" cy="10" r="2.5"/>
+              <path d="M10 1v2m0 14v2M4.22 4.22l1.42 1.42m8.72 8.72l1.42 1.42M1 10h2m14 0h2M4.22 15.78l1.42-1.42m8.72-8.72l1.42-1.42"/>
             </svg>
           </button>
-          <button className="btn-icon" onClick={() => setScreen(SCREENS.PROFILE)} title="Profile">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="10" cy="7" r="3" />
-              <path d="M4 18c0-3.314 2.686-6 6-6s6 2.686 6 6" />
+          <button className="search-nav-icon-btn" onClick={() => setScreen(SCREENS.PROFILE)} title="Profile">
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+              <path d="M10 10a3 3 0 100-6 3 3 0 000 6zM10 12c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4z"/>
             </svg>
           </button>
         </div>
       </div>
 
-      {/* Search Area */}
-      <div style={{ width: '100%', maxWidth: '720px', padding: '0 var(--spacing-xl)' }}>
-        {/* Personalized Greeting */}
-        <div style={{ marginBottom: 'var(--spacing-xl)', textAlign: 'center' }}>
-          <h1 style={{ 
-            fontSize: 'var(--font-size-3xl)', 
-            fontWeight: 'var(--font-weight-bold)', 
-            color: 'white',
-            marginBottom: 'var(--spacing-xs)',
-            textShadow: '0 2px 12px rgba(0,0,0,0.15)'
-          }}>
-            {greeting}, {userName || 'there'}!
-          </h1>
-          <p style={{ 
-            fontSize: 'var(--font-size-lg)', 
-            color: 'rgba(255,255,255,0.9)',
-            textShadow: '0 1px 4px rgba(0,0,0,0.1)'
-          }}>
-            What are you looking for?
-          </p>
-        </div>
+      {/* Main Content */}
+      <div className="search-main-content">
+        <h1 className="search-main-title">Find your files, effortlessly.</h1>
 
-        <div style={{ 
-          display: 'flex', 
-          gap: 'var(--spacing-md)',
-          marginBottom: 'var(--spacing-md)'
-        }}>
+        <div className="search-input-container">
           <input
             type="text"
-            className="glass-input search-input-enhanced"
-            placeholder="Enter your semantic query..."
+            className="search-main-input"
+            placeholder="Search your files semantically..."
             value={localQuery}
             onChange={(e) => setLocalQuery(e.target.value)}
             onKeyPress={handleKeyPress}
-            style={{ flex: 1 }}
+            disabled={isSearching}
           />
           <button 
-            className="btn-primary btn-search" 
+            className="search-main-button" 
             onClick={handleSearch}
             disabled={isSearching || !localQuery.trim()}
           >
@@ -188,121 +138,48 @@ export default function Search() {
           </button>
         </div>
 
-        {/* Suggestion Chips */}
-        {!searchQuery && (
-          <div style={{ 
-            display: 'flex', 
-            gap: 'var(--spacing-sm)',
-            flexWrap: 'wrap',
-            marginBottom: 'var(--spacing-xl)',
-            justifyContent: 'center'
-          }}>
-            {suggestionChips.map((chip, idx) => (
-              <button
-                key={idx}
-                className="suggestion-chip"
-                onClick={() => handleSuggestionClick(chip)}
-              >
-                {chip}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Loading Indicator */}
-        {isSearching && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 'var(--spacing-2xl)' }}>
-            <div className="loader" />
-          </div>
-        )}
+        <p className="search-helper-text">Start typing to search your local files.</p>
 
         {/* Search Results */}
-        {!isSearching && searchResults.length > 0 && (
-          <div style={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            gap: 'var(--spacing-md)',
-            maxHeight: '60vh',
-            overflowY: 'auto',
-            paddingRight: 'var(--spacing-sm)'
-          }}>
-            {searchResults.map((result, index) => (
-              <div
-                key={index}
-                className="glass-card"
-                onClick={() => handleOpenFile(result.path)}
-                style={{
-                  padding: 'var(--spacing-lg)',
-                  cursor: 'pointer',
-                  animation: `slideUp var(--transition-normal) ease-out ${index * 0.05}s both`
-                }}
-              >
-                <div style={{ 
-                  display: 'flex', 
-                  justifyContent: 'space-between', 
-                  alignItems: 'flex-start',
-                  marginBottom: 'var(--spacing-xs)'
-                }}>
-                  <h4 style={{ 
-                    fontSize: 'var(--font-size-base)', 
-                    fontWeight: 'var(--font-weight-semibold)',
-                    color: 'var(--color-text-primary)'
-                  }}>
-                    {result.filename || result.path.split(/[/\\]/).pop()}
-                  </h4>
-                  <span style={{ 
-                    fontSize: 'var(--font-size-sm)', 
-                    color: 'var(--color-primary)',
-                    fontWeight: 'var(--font-weight-medium)'
-                  }}>
-                    {(result.score * 100).toFixed(1)}%
-                  </span>
+        {searchResults && searchResults.length > 0 && (
+          <div className="search-results-container">
+            <h2 className="search-results-title">Results for "{searchQuery}"</h2>
+            <div className="search-results-list">
+              {searchResults.map((result, index) => (
+                <div 
+                  key={index} 
+                  className="search-result-card"
+                  onClick={() => handleOpenFile(result.path)}
+                >
+                  <div className="result-icon">
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M4 2a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7.414A2 2 0 0017.414 6L13 1.586A2 2 0 0011.586 1H4z"/>
+                    </svg>
+                  </div>
+                  <div className="result-content">
+                    <h3 className="result-filename">{result.filename}</h3>
+                    <p className="result-path">{result.path}</p>
+                    {result.snippet && (
+                      <p className="result-snippet">{result.snippet}</p>
+                    )}
+                  </div>
+                  <div className="result-score">{(result.score * 100).toFixed(0)}%</div>
                 </div>
-                <p style={{ 
-                  fontSize: 'var(--font-size-sm)', 
-                  color: 'var(--color-text-secondary)',
-                  marginBottom: 'var(--spacing-sm)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}>
-                  {result.path}
-                </p>
-                {result.chunk && (
-                  <p style={{ 
-                    fontSize: 'var(--font-size-sm)', 
-                    color: 'var(--color-text-tertiary)',
-                    lineHeight: '1.6',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 2,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden'
-                  }}>
-                    {result.chunk}
-                  </p>
-                )}
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         )}
 
-        {/* No Results */}
-        {!isSearching && searchQuery && searchResults.length === 0 && (
-          <div style={{ textAlign: 'center', marginTop: 'var(--spacing-2xl)' }}>
-            <p className="text-base" style={{ color: 'var(--color-text-secondary)' }}>
-              No results found for "{searchQuery}"
-            </p>
+        {searchQuery && searchResults && searchResults.length === 0 && !isSearching && (
+          <div className="search-no-results">
+            <p>No results found for "{searchQuery}"</p>
           </div>
         )}
+      </div>
 
-        {/* Empty State */}
-        {!isSearching && !searchQuery && searchResults.length === 0 && (
-          <div style={{ textAlign: 'center', marginTop: 'var(--spacing-2xl)' }}>
-            <p className="text-base" style={{ color: 'var(--color-text-tertiary)' }}>
-              Enter a query to search your files
-            </p>
-          </div>
-        )}
+      {/* Footer */}
+      <div className="search-footer">
+        © 2025 SAGE. All rights reserved by Aravind
       </div>
     </div>
   );
