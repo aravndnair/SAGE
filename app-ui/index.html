@@ -1,57 +1,53 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>SAGE</title>
-<style>
-body {
-    background:#111;
-    color:#eee;
-    font-family:Arial;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    padding:22px;
-}
-#query {
-    width:420px;
-    padding:12px;
-    border:none;
-    border-radius:8px;
-    margin-bottom:10px;
-}
-#searchBtn {
-    padding:10px 18px;
-    background:#0066ff;
-    border-radius:8px;
-    border:none;
-    color:white;
-    cursor:pointer;
-}
-#results {
-    margin-top:22px;
-    max-width:600px;
-}
-.result {
-    background:#1a1a1a;
-    border-radius:10px;
-    padding:10px;
-    margin-bottom:12px;
-    border:1px solid #333;
-}
-.result h3 { margin:0 0 6px; color:#66b7ff; }
-.result p { font-size:12px; opacity:0.7; margin:0 0 12px; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SAGE</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+    }
+    #root {
+      width: 100%;
+      height: 100vh;
+    }
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color: #6e6e73;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .error { color: #ff3b30; font-size: 14px; max-width: 500px; text-align: center; }
+  </style>
 </head>
 <body>
-
-<h2>SAGE – Semantic File Search</h2>
-
-<input type="text" id="query" placeholder="Type something..." />
-<button id="searchBtn">Search</button>
-
-<div id="results"></div>
-
-<script src="renderer.js"></script>
+  <div id="root">
+    <div class="loading">
+      <div>Loading SAGE...</div>
+      <div id="error" class="error" style="display:none"></div>
+    </div>
+  </div>
+  <script>
+    window.addEventListener('error', function(e) {
+      console.error('Global error:', e.error);
+      document.getElementById('error').style.display = 'block';
+      document.getElementById('error').textContent = 'Error: ' + (e.error?.message || e.message);
+    });
+    
+    window.addEventListener('unhandledrejection', function(e) {
+      console.error('Unhandled rejection:', e.reason);
+      document.getElementById('error').style.display = 'block';
+      document.getElementById('error').textContent = 'Error: ' + (e.reason?.message || e.reason);
+    });
+  </script>
+  <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>

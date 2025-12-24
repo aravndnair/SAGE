@@ -3,13 +3,21 @@
   "version": "1.0.0",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "dev": "vite",
+    "build": "vite build",
+    "start": "npm run build && electron ."
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  },
   "devDependencies": {
-    "electron": "^39.2.5"
+    "@vitejs/plugin-react": "^4.2.1",
+    "electron": "^39.2.5",
+    "vite": "^5.0.0"
   }
 }
