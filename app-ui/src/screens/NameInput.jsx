@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import sageLogo from '../../logo/SageNoBG.png';
+import peopleIcon from '../../logo/people.png';
 import { SCREENS, useApp } from '../state/appState';
 import '../theme/theme.css';
 
@@ -13,40 +15,72 @@ export default function NameInput() {
     }
   };
 
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && name.trim()) {
-      handleDone();
-    }
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && name.trim()) handleDone();
   };
 
   return (
-    <div className="screen">
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--spacing-xl)' }}>
-        <h2 className="text-2xl text-center" style={{ color: 'var(--color-text-primary)' }}>
-          What's your name?
-        </h2>
-        
-        <input
-          type="text"
-          className="glass-input"
-          placeholder="Enter your name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyPress={handleKeyPress}
-          autoFocus
-          style={{
-            width: '360px',
-            textAlign: 'center'
-          }}
-        />
+    <div className="screen nameinput-screen">
+      {/* Background */}
+      <div className="nameinput-ambient" aria-hidden="true">
+        <div className="nameinput-blob nameinput-blob--one" />
+        <div className="nameinput-blob nameinput-blob--two" />
+        <div className="nameinput-blob nameinput-blob--three" />
+      </div>
 
-        <button
-          className="btn-primary"
-          onClick={handleDone}
-          disabled={!name.trim()}
-        >
-          Done
-        </button>
+      <div className="nameinput-wrap">
+        <div className="glass-panel nameinput-card animate-fade-in-up">
+          <div className="nameinput-logo" aria-hidden="true">
+            <img className="nameinput-logo-img" src={sageLogo} alt="" />
+          </div>
+
+          <div className="nameinput-head">
+            <div className="nameinput-kicker">Welcome to Sage</div>
+            <h1 className="nameinput-title">
+              What should we <br /> call you?
+            </h1>
+          </div>
+
+          <div className="nameinput-form">
+            <label className="sr-only" htmlFor="sageNameInput">
+              Your Name
+            </label>
+            <div className="nameinput-field">
+              <img className="nameinput-field-icon" src={peopleIcon} alt="" />
+              <input
+                id="sageNameInput"
+                type="text"
+                className="nameinput-input"
+                placeholder="Your Name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                onKeyDown={handleKeyDown}
+                autoFocus
+                autoComplete="off"
+              />
+            </div>
+
+            <button
+              className="nameinput-btn"
+              onClick={handleDone}
+              disabled={!name.trim()}
+              type="button"
+            >
+              <span className="nameinput-btn-content">
+                Done <span className="nameinput-btn-arrow">→</span>
+              </span>
+              <span className="nameinput-btn-sheen" aria-hidden="true" />
+            </button>
+          </div>
+
+          <div className="nameinput-dots" aria-hidden="true">
+            <span className="nameinput-dot nameinput-dot--active" />
+            <span className="nameinput-dot" />
+            <span className="nameinput-dot" />
+          </div>
+        </div>
+
+        <div className="nameinput-footer">Press Enter to continue</div>
       </div>
     </div>
   );

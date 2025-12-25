@@ -1,15 +1,26 @@
-import { useEffect, useState } from 'react';
-import { addRoot as apiAddRoute, getRoots, triggerIndexing } from '../api/backend';
+import { useEffect, useMemo, useState } from 'react';
+import { addRoot as apiAddRoute, removeRoot as apiRemoveRoute, getRoots, triggerIndexing } from '../api/backend';
 import { SCREENS, useApp } from '../state/appState';
 import '../theme/theme.css';
+
+import sageLogo from '../../logo/SageNoBG.png';
 
 const BASE_URL = "http://127.0.0.1:8000";
 
 export default function Settings() {
-  const { setScreen, saveRoutes, setPendingRoutes } = useApp();
+  const { setScreen, saveRoutes, setPendingRoutes, userName } = useApp();
   const [localRoutes, setLocalRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAcknowledgement, setShowAcknowledgement] = useState(false);
+
+  const initials = useMemo(() => {
+    const name = (userName || 'User').trim();
+    if (!name) return 'U';
+    const parts = name.split(/\s+/).filter(Boolean);
+    const first = parts[0]?.[0] || 'U';
+    const second = parts.length > 1 ? parts[parts.length - 1]?.[0] : '';
+    return (first + second).toUpperCase();
+  }, [userName]);
 
   useEffect(() => {
     loadRoutes();
@@ -67,115 +78,165 @@ export default function Settings() {
 
   return (
     <div className="settings-screen">
-      {/* Top Navigation Bar */}
-      <div className="settings-top-nav">
-        <div className="settings-nav-logo">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="#007aff">
-            <path d="M12 2L2 7v10c0 5.5 3.8 9.7 9 11 5.2-1.3 9-5.5 9-11V7l-10-5z"/>
-          </svg>
-          <span>sage</span>
-        </div>
-        <div className="settings-nav-icons">
-          <button className="settings-nav-icon-btn">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M10 3c-3.9 0-7 3.1-7 7s3.1 7 7 7 7-3.1 7-7-3.1-7-7-7zm0 2c2.8 0 5 2.2 5 5s-2.2 5-5 5-5-2.2-5-5 2.2-5 5-5z"/>
-              <circle cx="10" cy="8" r="1.5"/>
-              <path d="M10 11c-1.7 0-3 1-3 2h6c0-1-1.3-2-3-2z"/>
-            </svg>
+      <div className="settings-backdrop" aria-hidden="true" />
+
+      <main className="settings-frame settings-animate-fade-in" aria-label="Settings">
+        <aside className="settings-aside">
+          <div className="settings-aside-logo" aria-label="SAGE">
+            <img src={sageLogo} alt="SAGE Logo" />
+          </div>
+
+          <nav className="settings-nav" aria-label="Navigation">
+            <button
+              type="button"
+              className="settings-nav-item"
+              onClick={() => setScreen(SCREENS.SEARCH)}
+            >
+              <span className="settings-nav-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                  <path d="M8.5 15a6.5 6.5 0 1 1 0-13 6.5 6.5 0 0 1 0 13Z" />
+                  <path d="M13.5 13.5 18 18" />
+                </svg>
+              </span>
+              <span className="settings-nav-text">Search</span>
+            </button>
+
+            <div className="settings-nav-section">System</div>
+
+            <button
+              type="button"
+              className="settings-nav-item"
+              onClick={() => setScreen(SCREENS.INDEXING_LOGS)}
+            >
+              <span className="settings-nav-icon" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 3v7l4 2" />
+                  <path d="M10 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16Z" />
+                </svg>
+              </span>
+              <span className="settings-nav-text">Indexing Logs</span>
+            </button>
+          </nav>
+
+          <button
+            type="button"
+            className="settings-user"
+            onClick={() => setScreen(SCREENS.PROFILE)}
+            aria-label="Open Profile"
+          >
+            <div className="settings-user-avatar" aria-hidden="true">{initials}</div>
+            <div className="settings-user-meta">
+              <div className="settings-user-name">{userName || 'User'}</div>
+              <div className="settings-user-plan">Pro Plan</div>
+            </div>
           </button>
-        </div>
-      </div>
+        </aside>
 
-      {/* Main Content Container */}
-      <div className="settings-main-container">
-        {/* Header with back button */}
-        <div className="settings-header-row">
-          <button className="settings-circle-back" onClick={() => setScreen(SCREENS.SEARCH)}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M10 12L6 8l4-4" />
-            </svg>
-          </button>
-          <h1 className="settings-main-title">Settings</h1>
-        </div>
+        <section className="settings-main">
+          <header className="settings-header">
+            <h1 className="settings-header-title">Directory Management</h1>
+            <div className="settings-header-actions" />
+          </header>
 
-        {/* Content Cards */}
-        <div className="settings-cards-container">
-          {/* Manage Roots Card */}
-          <div className="settings-card">
-            <h2 className="settings-card-title">Manage Roots</h2>
-            <p className="settings-card-description">
-              Select the folders SAGE can access to perform semantic searches. For privacy, SAGE only scans directories you explicitly add.
-            </p>
+          <div className="settings-scroll sage-scroll">
+            <div className="settings-intro">
+              Manage the folders SAGE can access for semantic search. You can monitor up to <span className="settings-intro-strong">5 directory routes</span>.
+              Changes require re-indexing.
+            </div>
 
-            <div className="settings-roots-section">
-              <label className="settings-roots-label">Selected Roots</label>
-              
+            <div className="settings-routes-card">
+              <div className="settings-routes-header">
+                <h3 className="settings-routes-title">Monitored Routes ({localRoutes.length}/5)</h3>
+                <button
+                  type="button"
+                  className="settings-add-route"
+                  onClick={handleSelectFolder}
+                  disabled={loading || localRoutes.length >= 5}
+                >
+                  <span className="settings-add-route-icon" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <path d="M10 4v12" />
+                      <path d="M4 10h12" />
+                    </svg>
+                  </span>
+                  Add Route
+                </button>
+              </div>
+
               {loading ? (
-                <div style={{ padding: '2rem', textAlign: 'center' }}>
+                <div className="settings-loading">
                   <div className="loader" />
                 </div>
               ) : (
                 <>
                   {localRoutes.length > 0 ? (
-                    <div className="settings-roots-box">
+                    <ul className="settings-route-list">
                       {localRoutes.map((route, index) => (
-                        <div key={index} className="settings-root-row">
-                          <span className="settings-root-text">{route}</span>
+                        (() => {
+                          const variants = ['blue', 'purple', 'green'];
+                          const variant = variants[index % variants.length];
+
+                          return (
+                        <li key={`${route}-${index}`} className="settings-route-item">
+                          <div className="settings-route-left">
+                            <div className={`settings-route-icon is-${variant}`} aria-hidden="true">
+                              <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3.5 6.5a2 2 0 0 1 2-2h3.6l2 2H16.5a2 2 0 0 1 2 2V14a2 2 0 0 1-2 2H5.5a2 2 0 0 1-2-2V6.5Z" />
+                              </svg>
+                            </div>
+                            <div className="settings-route-text">
+                              <div className="settings-route-path" title={route}>{route}</div>
+                              <div className="settings-route-sub">Selected local folder</div>
+                            </div>
+                          </div>
+
                           <button
-                            className="settings-delete-btn"
+                            type="button"
+                            className="settings-route-remove"
                             onClick={() => handleRemove(index)}
-                            title="Remove"
+                            title="Remove Route"
+                            aria-label="Remove Route"
                           >
-                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                              <path d="M5.5 3h5v1h-5V3zm-1 2h8v8a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1V5zm2 1v6h1V6h-1zm3 0v6h1V6h-1z"/>
+                            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M7.5 4.5h5" />
+                              <path d="M6 6h8" />
+                              <path d="M7 6l.6 9h4.8l.6-9" />
+                              <path d="M8.5 8.5v5" />
+                              <path d="M11.5 8.5v5" />
                             </svg>
                           </button>
-                        </div>
+                        </li>
+                          );
+                        })()
                       ))}
-                    </div>
+                    </ul>
                   ) : (
-                    <div className="settings-empty-box">
-                      <p>No folders selected yet</p>
-                    </div>
+                    <div className="settings-empty">No directory routes added yet.</div>
                   )}
                 </>
               )}
-              
-              <button 
-                className="settings-add-btn" 
-                onClick={handleSelectFolder}
-                disabled={localRoutes.length >= 5}
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                  <path d="M8 3v10M3 8h10" />
-                </svg>
-                Add Roots
-              </button>
             </div>
           </div>
 
-          {/* Save Changes Card */}
-          <div className="settings-card">
-            <h2 className="settings-card-title">Save Changes</h2>
-            <p className="settings-card-description">
-              Apply your changes to the directory settings. You will be prompted to acknowledge privacy terms.
-            </p>
-            
-            <button 
-              className="settings-save-btn" 
+          <footer className="settings-footer">
+            <button
+              type="button"
+              className="settings-footer-cancel"
+              onClick={() => setScreen(SCREENS.SEARCH)}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="settings-footer-save"
               onClick={handleSave}
               disabled={localRoutes.length === 0}
             >
-              Save Settings
+              Save Changes
             </button>
-          </div>
-        </div>
-
-        {/* Footer */}
-        <div className="settings-footer-text">
-          © 2025. All rights reserved by Aravind
-        </div>
-      </div>
+          </footer>
+        </section>
+      </main>
     </div>
   );
 }
@@ -184,27 +245,46 @@ function Acknowledgement({ onBack }) {
   const { setScreen, pendingRoutes, saveRoutes } = useApp();
   const [acknowledged, setAcknowledged] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [isDone, setIsDone] = useState(false);
+
+  const normalizeRoute = (route) => String(route ?? '').replace(/[\\/]+$/, '');
 
   const handleConfirm = async () => {
     if (!acknowledged) return;
 
     setSaving(true);
     try {
+      const desiredRoutes = Array.isArray(pendingRoutes) ? pendingRoutes : [];
+
       const currentBackendRoutes = await getRoots();
-      const newRoutes = pendingRoutes.filter(route => !currentBackendRoutes.includes(route));
-      
-      for (const route of newRoutes) {
+      const currentNorm = new Map(
+        (currentBackendRoutes || []).map((r) => [normalizeRoute(r), r])
+      );
+      const desiredNorm = new Map(
+        desiredRoutes.map((r) => [normalizeRoute(r), r])
+      );
+
+      const routesToRemove = (currentBackendRoutes || []).filter((r) => !desiredNorm.has(normalizeRoute(r)));
+      const routesToAdd = desiredRoutes.filter((r) => !currentNorm.has(normalizeRoute(r)));
+
+      // Apply removals first so backend roots match desired state.
+      for (const route of routesToRemove) {
+        await apiRemoveRoute(route);
+      }
+
+      for (const route of routesToAdd) {
         await apiAddRoute(route);
       }
 
       const updatedRoutes = await getRoots();
       saveRoutes(updatedRoutes);
 
-      if (newRoutes.length > 0) {
+      // Any change (add OR remove) requires re-indexing to keep vector store in sync.
+      if (routesToAdd.length > 0 || routesToRemove.length > 0) {
         await triggerIndexing();
       }
 
-      setScreen(SCREENS.SEARCH);
+      setIsDone(true);
     } catch (error) {
       console.error('Failed to save routes:', error);
       alert('Failed to save routes. Please try again.');
@@ -213,61 +293,150 @@ function Acknowledgement({ onBack }) {
     }
   };
 
-  return (
-    <div className="acknowledgement-screen">
-      <div className="acknowledgement-container">
-        <div className="acknowledgement-card">
-          <h1 className="acknowledgement-title">
-            Your Privacy Matters: Important Acknowledgement
-          </h1>
-          
-          <p className="acknowledgement-subtitle">
-            Please read the following information carefully before proceeding.
-          </p>
-
-          <div className="acknowledgement-content">
-            <p className="acknowledgement-paragraph">
-              SAGE is designed with your privacy as its utmost priority. All file processing, 
-              indexing, and semantic analysis occurs exclusively on your local device. We want 
-              to assure you that your files and any data derived from them will *never* leave 
-              your computer. There is no cloud storage, no external servers, and no internet 
-              transmission of your file content.
-            </p>
-
-            <p className="acknowledgement-paragraph">
-              You retain full control over which directories SAGE can access. It is crucial that 
-              you carefully select only the folders you wish to make searchable. Please refrain 
-              from adding directories containing highly sensitive or confidential information that 
-              you would not want to be indexed and searched by SAGE, even locally.
-            </p>
-
-            <p className="acknowledgement-paragraph">
-              While SAGE ensures your data remains offline, the responsibility for securing your 
-              local device and managing access to it remains with you.
-            </p>
+  if (isDone) {
+    return (
+      <div className="acknowledgement-screen">
+        <div className="acknowledgement-success">
+          <div className="acknowledgement-success-icon" aria-hidden="true">
+            <svg width="28" height="28" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 10l4 4 8-8" />
+            </svg>
           </div>
-
-          <label className="acknowledgement-checkbox">
-            <input
-              type="checkbox"
-              checked={acknowledged}
-              onChange={(e) => setAcknowledged(e.target.checked)}
-              className="acknowledgement-checkbox-input"
-            />
-            <span className="acknowledgement-checkbox-label">
-              I acknowledge and understand SAGE's privacy policy.
-            </span>
-          </label>
-
+          <h2 className="acknowledgement-success-title">You're all set</h2>
+          <p className="acknowledgement-success-subtitle">SAGE is now configured for secure local search.</p>
           <button
-            className="acknowledgement-button"
-            onClick={handleConfirm}
-            disabled={!acknowledged || saving}
+            className="acknowledgement-success-button"
+            type="button"
+            onClick={() => setScreen(SCREENS.SEARCH)}
           >
-            {saving ? 'Saving...' : 'Save and Continue'}
+            Return to Search
           </button>
         </div>
       </div>
+    );
+  }
+
+  return (
+    <div className="acknowledgement-screen">
+      <main className="acknowledgement-card" aria-label="Security Acknowledgement">
+        <div className="acknowledgement-header">
+          <div className="acknowledgement-logo" aria-hidden="true">
+            <img src={sageLogo} alt="SAGE Semantic Search Logo" />
+          </div>
+          <h1 className="acknowledgement-title">Security Acknowledgment</h1>
+          <p className="acknowledgement-subtitle">SAGE Semantic Search System</p>
+        </div>
+
+        <div className="acknowledgement-body">
+          <div className="acknowledgement-tiles">
+            <div className="acknowledgement-tile">
+              <div className="acknowledgement-tile-icon" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M6 6l8 8" />
+                  <path d="M14 6l-1.3 1.3" />
+                  <path d="M7.3 12.7 6 14" />
+                  <path d="M3 10a7 7 0 0 1 12.2-4.7" />
+                  <path d="M17 10a7 7 0 0 1-12.2 4.7" />
+                </svg>
+              </div>
+              <h3 className="acknowledgement-tile-title">100% Offline</h3>
+              <p className="acknowledgement-tile-text">No internet connection required for analysis.</p>
+            </div>
+
+            <div className="acknowledgement-tile">
+              <div className="acknowledgement-tile-icon" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M4 5h12" />
+                  <path d="M4 10h12" />
+                  <path d="M4 15h12" />
+                  <path d="M6 5v10" />
+                  <path d="M14 5v10" />
+                </svg>
+              </div>
+              <h3 className="acknowledgement-tile-title">Local Processing</h3>
+              <p className="acknowledgement-tile-text">All computations happen on your device.</p>
+            </div>
+
+            <div className="acknowledgement-tile">
+              <div className="acknowledgement-tile-icon" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 2l7 3v6c0 4-2.7 6.9-7 7.9C5.7 17.9 3 15 3 11V5l7-3Z" />
+                  <path d="M7.5 10.2 9.4 12l3.6-3.6" />
+                </svg>
+              </div>
+              <h3 className="acknowledgement-tile-title">Zero Exfiltration</h3>
+              <p className="acknowledgement-tile-text">Your files never leave this device.</p>
+            </div>
+          </div>
+
+          <div className="acknowledgement-warning">
+            <div className="acknowledgement-warning-icon" aria-hidden="true">
+              <svg width="22" height="22" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 2 2.3 17h15.4L10 2Z" />
+                <path d="M10 7v4" />
+                <path d="M10 14h.01" />
+              </svg>
+            </div>
+            <div>
+              <h4 className="acknowledgement-warning-title">Sensitive Data Handling Warning</h4>
+              <p className="acknowledgement-warning-text">
+                SAGE creates semantic vector embeddings of your documents to enable natural language search. While these embeddings are stored locally,
+                you are responsible for ensuring that the folders you index do not contain restricted or classified material that violates your organization's
+                compliance policies.
+              </p>
+            </div>
+          </div>
+
+          <div className="acknowledgement-note">
+            By proceeding, you confirm that you understand SAGE runs as a strictly local instance. No telemetry, usage data, or file contents are
+            transmitted to external servers or third-party APIs.
+          </div>
+
+          <button
+            type="button"
+            className="acknowledgement-checkrow"
+            onClick={() => setAcknowledged((v) => !v)}
+          >
+            <span className="acknowledgement-checkbox" aria-hidden="true">
+              <input
+                id="acknowledge-check"
+                type="checkbox"
+                checked={acknowledged}
+                onChange={(e) => setAcknowledged(e.target.checked)}
+              />
+            </span>
+            <span className="acknowledgement-checktext">
+              <span className="acknowledgement-checktitle">I acknowledge and understand</span>
+              <span className="acknowledgement-checkdesc">I confirm that I have read the security notice and authorize local indexing.</span>
+            </span>
+          </button>
+        </div>
+
+        <div className="acknowledgement-footer">
+          <button
+            type="button"
+            className="acknowledgement-cancel"
+            onClick={onBack}
+            disabled={saving}
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            className="acknowledgement-confirm"
+            onClick={handleConfirm}
+            disabled={!acknowledged || saving}
+          >
+            <span>{saving ? 'Saving…' : 'Confirm & Continue'}</span>
+            <span className="acknowledgement-confirm-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 10h12" />
+                <path d="M12 6l4 4-4 4" />
+              </svg>
+            </span>
+          </button>
+        </div>
+      </main>
     </div>
   );
 }

@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from "react";
+import IndexingLogs from "./screens/IndexingLogs.jsx";
 import NameInput from "./screens/NameInput.jsx";
 import Profile from "./screens/Profile.jsx";
 import Search from "./screens/Search.jsx";
@@ -11,6 +13,29 @@ export default function App() {
   try {
     const { screen } = useApp();
 
+    const TRANSITION_MS = 350;
+    const [activeScreen, setActiveScreen] = useState(screen);
+    const [outgoingScreen, setOutgoingScreen] = useState(null);
+    const activeRef = useRef(activeScreen);
+
+    useEffect(() => {
+      activeRef.current = activeScreen;
+    }, [activeScreen]);
+
+    useEffect(() => {
+      if (!screen) return;
+      if (screen === activeRef.current) return;
+
+      setOutgoingScreen(activeRef.current);
+      setActiveScreen(screen);
+
+      const timer = setTimeout(() => {
+        setOutgoingScreen(null);
+      }, TRANSITION_MS);
+
+      return () => clearTimeout(timer);
+    }, [screen]);
+
     // Debug: log current screen
     console.log("Current screen:", screen);
 
@@ -20,28 +45,39 @@ export default function App() {
       return <Search />;
     }
 
-    switch (screen) {
-      case SCREENS.WELCOME:
-        return <Welcome />;
+    const renderScreen = (screenId) => {
+      switch (screenId) {
+        case SCREENS.WELCOME:
+          return <Welcome />;
+        case SCREENS.NAME_INPUT:
+          return <NameInput />;
+        case SCREENS.SETUP_COMPLETE:
+          return <SetupComplete />;
+        case SCREENS.SEARCH:
+          return <Search />;
+        case SCREENS.INDEXING_LOGS:
+          return <IndexingLogs />;
+        case SCREENS.SETTINGS:
+          return <Settings />;
+        case SCREENS.PROFILE:
+          return <Profile />;
+        default:
+          return <Search />;
+      }
+    };
 
-      case SCREENS.NAME_INPUT:
-        return <NameInput />;
-
-      case SCREENS.SETUP_COMPLETE:
-        return <SetupComplete />;
-
-      case SCREENS.SEARCH:
-        return <Search />;
-
-      case SCREENS.SETTINGS:
-        return <Settings />;
-
-      case SCREENS.PROFILE:
-        return <Profile />;
-
-      default:
-        return <Search />;
-    }
+    return (
+      <div className="sage-screen-stack">
+        {outgoingScreen && (
+          <div className="sage-screen-layer sage-screen-layer--out" aria-hidden="true">
+            {renderScreen(outgoingScreen)}
+          </div>
+        )}
+        <div className="sage-screen-layer sage-screen-layer--in">
+          {renderScreen(activeScreen)}
+        </div>
+      </div>
+    );
   } catch (error) {
     console.error("App Error:", error);
     return (

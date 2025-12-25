@@ -107,10 +107,11 @@ def add_user_root(path: str) -> bool:
 
 def remove_user_root(path: str) -> bool:
     """Remove a root path from the database"""
+    normalized_path = normalize_path(path)
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        cur.execute("DELETE FROM user_roots WHERE path = ?", (path,))
+        cur.execute("DELETE FROM user_roots WHERE path = ?", (normalized_path,))
         conn.commit()
         return True
     except Exception as e:

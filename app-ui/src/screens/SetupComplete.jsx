@@ -4,17 +4,11 @@ import '../theme/theme.css';
 
 export default function SetupComplete() {
   const { setScreen, markOnboardingComplete } = useApp();
-  const [confetti, setConfetti] = useState([]);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   useEffect(() => {
-    // Generate confetti particles
-    const particles = Array.from({ length: 50 }, (_, i) => ({
-      id: i,
-      left: Math.random() * 100,
-      delay: Math.random() * 0.5,
-      color: ['#007aff', '#34c759', '#ff3b30', '#ff9500', '#af52de'][Math.floor(Math.random() * 5)]
-    }));
-    setConfetti(particles);
+    // Trigger confetti after a brief moment
+    setTimeout(() => setShowConfetti(true), 100);
 
     // Auto-transition to SEARCH after 3 seconds
     const timer = setTimeout(() => {
@@ -25,20 +19,44 @@ export default function SetupComplete() {
     return () => clearTimeout(timer);
   }, [setScreen, markOnboardingComplete]);
 
+  // Generate confetti pieces
+  const confettiPieces = showConfetti ? Array.from({ length: 60 }, (_, i) => {
+    const colors = ['#007aff', '#34c759', '#ff3b30', '#ff9500', '#af52de', '#5856d6', '#ff2d55'];
+    
+    // Create radial burst pattern
+    const angle = (Math.PI * 2 * i) / 60;
+    const velocity = 200 + Math.random() * 150;
+    const xTarget = Math.cos(angle) * velocity;
+    const yTarget = Math.sin(angle) * velocity - 100; // Slight upward bias
+    
+    const delay = Math.random() * 0.2;
+    const duration = 2.8 + Math.random() * 0.8;
+    const rotation = (Math.random() - 0.5) * 1080;
+    const size = 7 + Math.random() * 5;
+    const isCircle = Math.random() > 0.4;
+    
+    return (
+      <div
+        key={i}
+        className="confetti-piece"
+        style={{
+          width: `${size}px`,
+          height: `${size}px`,
+          backgroundColor: colors[Math.floor(Math.random() * colors.length)],
+          borderRadius: isCircle ? '50%' : '2px',
+          '--delay': `${delay}s`,
+          '--duration': `${duration}s`,
+          '--x-target': `${xTarget}px`,
+          '--y-target': `${yTarget}px`,
+          '--rotation': `${rotation}deg`,
+        }}
+      />
+    );
+  }) : [];
+
   return (
     <div className="screen">
-      {/* Confetti Animation */}
-      {confetti.map((particle) => (
-        <div
-          key={particle.id}
-          className="confetti"
-          style={{
-            left: `${particle.left}%`,
-            backgroundColor: particle.color,
-            animationDelay: `${particle.delay}s`,
-          }}
-        />
-      ))}
+      {confettiPieces}
 
       <h1 className="text-3xl" style={{ color: 'var(--color-text-primary)' }}>
         You're all set

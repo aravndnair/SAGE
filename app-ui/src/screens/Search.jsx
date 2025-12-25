@@ -1,15 +1,36 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getRoots, searchFiles } from '../api/backend';
+import ResultCard from '../components/ResultCard';
+import SearchBar from '../components/SearchBar';
 import { SCREENS, useApp } from '../state/appState';
 import '../theme/theme.css';
 
+import peopleIcon from '../../logo/people.png';
+import settingsIcon from '../../logo/setting.png';
+
 export default function Search() {
-  const { setScreen, searchQuery, setSearchQuery, searchResults, setSearchResults, isSearching, setIsSearching, routes, userName, saveRoutes } = useApp();
+  const { setScreen, searchQuery, setSearchQuery, searchResults, setSearchResults, setIndexingLogs, isSearching, setIsSearching, routes, userName, saveRoutes } = useApp();
   const [localQuery, setLocalQuery] = useState('');
   const [routesLoading, setRoutesLoading] = useState(true);
+  const inputRef = useRef(null);
 
   useEffect(() => {
     loadRoutes();
+  }, []);
+
+  useEffect(() => {
+    const onGlobalKeyDown = (e) => {
+      const isK = typeof e.key === 'string' && e.key.toLowerCase() === 'k';
+      if (!isK) return;
+
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        inputRef.current?.focus?.();
+      }
+    };
+
+    window.addEventListener('keydown', onGlobalKeyDown);
+    return () => window.removeEventListener('keydown', onGlobalKeyDown);
   }, []);
 
   const loadRoutes = async () => {
@@ -33,17 +54,14 @@ export default function Search() {
     try {
       const results = await searchFiles(localQuery, 10);
       setSearchResults(results || []);
+      // Persist to Indexing Logs (but NOT back into Search on restart).
+      setIndexingLogs?.(localQuery, results || []);
     } catch (error) {
       console.error('Search failed:', error);
       setSearchResults([]);
+      setIndexingLogs?.(localQuery, []);
     } finally {
       setIsSearching(false);
-    }
-  };
-
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      handleSearch();
     }
   };
 
@@ -52,6 +70,8 @@ export default function Search() {
       await window.electron.openFile(filePath);
     }
   };
+
+  const results = useMemo(() => (Array.isArray(searchResults) ? searchResults : []), [searchResults]);
 
   // First-run gate
   if (routesLoading) {
@@ -92,95 +112,91 @@ export default function Search() {
 
   return (
     <div className="search-page">
-      {/* Top Navigation Bar */}
-      <div className="search-top-nav">
-        <div className="search-nav-logo">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="#007aff">
-            <path d="M12 2L2 7v10c0 5.5 3.8 9.7 9 11 5.2-1.3 9-5.5 9-11V7l-10-5z"/>
-          </svg>
-          <span>SAGE</span>
-        </div>
-        <div className="search-nav-icons">
-          <button className="search-nav-icon-btn" onClick={() => setScreen(SCREENS.SETTINGS)} title="Settings">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <circle cx="10" cy="10" r="2.5"/>
-              <path d="M10 1v2m0 14v2M4.22 4.22l1.42 1.42m8.72 8.72l1.42 1.42M1 10h2m14 0h2M4.22 15.78l1.42-1.42m8.72-8.72l1.42-1.42"/>
-            </svg>
-          </button>
-          <button className="search-nav-icon-btn" onClick={() => setScreen(SCREENS.PROFILE)} title="Profile">
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-              <path d="M10 10a3 3 0 100-6 3 3 0 000 6zM10 12c-4 0-7 2-7 4v1h14v-1c0-2-3-4-7-4z"/>
-            </svg>
-          </button>
-        </div>
+      {/* Ambient Background */}
+      <div className="search-ambient" aria-hidden="true">
+        <div className="search-ambient-blob search-ambient-blob--primary" />
+        <div className="search-ambient-blob search-ambient-blob--secondary" />
       </div>
 
-      {/* Main Content */}
-      <div className="search-main-content">
-        <h1 className="search-main-title">Find your files, effortlessly.</h1>
+      {/* Header */}
+      <header className="search-top-nav">
+        <div className="search-nav-spacer" />
 
-        <div className="search-input-container">
-          <input
-            type="text"
-            className="search-main-input"
-            placeholder="Search your files semantically..."
-            value={localQuery}
-            onChange={(e) => setLocalQuery(e.target.value)}
-            onKeyPress={handleKeyPress}
-            disabled={isSearching}
-          />
-          <button 
-            className="search-main-button" 
-            onClick={handleSearch}
-            disabled={isSearching || !localQuery.trim()}
+        <div className="search-nav-logo" aria-label="SAGE Home">
+          <div className="search-brand">
+            <h1 className="search-logo-text">SAGE</h1>
+            <div className="search-brand-sub">© 2025 . All rights reserved by Aravind</div>
+          </div>
+        </div>
+
+        <div className="search-nav-controls">
+          <button
+            className="search-icon-btn"
+            onClick={() => setScreen(SCREENS.SETTINGS)}
+            title="Settings"
+            type="button"
           >
-            {isSearching ? 'Searching...' : 'Search'}
+            <img className="search-nav-icon-img" src={settingsIcon} alt="" />
+          </button>
+
+          <button
+            className="search-avatar-btn"
+            onClick={() => setScreen(SCREENS.PROFILE)}
+            title="Profile"
+            type="button"
+          >
+            <span className="sr-only">Open profile</span>
+            <img className="search-nav-icon-img" src={peopleIcon} alt="" />
           </button>
         </div>
+      </header>
 
-        <p className="search-helper-text">Start typing to search your local files.</p>
+      {/* Main */}
+      <main className="search-main">
+        <div className="search-headline animate-fade-in-up">
+          <h2 className="search-title">Search your knowledge base</h2>
+          <p className="search-subtitle">Find documents, insights, and answers instantly.</p>
+        </div>
 
-        {/* Search Results */}
-        {searchResults && searchResults.length > 0 && (
-          <div className="search-results-container">
-            <h2 className="search-results-title">Results for "{searchQuery}"</h2>
-            <div className="search-results-list">
-              {searchResults.map((result, index) => (
-                <div 
-                  key={index} 
-                  className="search-result-card"
-                  onClick={() => handleOpenFile(result.path)}
-                >
-                  <div className="result-icon">
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                      <path d="M4 2a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V7.414A2 2 0 0017.414 6L13 1.586A2 2 0 0011.586 1H4z"/>
-                    </svg>
-                  </div>
-                  <div className="result-content">
-                    <h3 className="result-filename">{result.filename}</h3>
-                    <p className="result-path">{result.path}</p>
-                    {result.snippet && (
-                      <p className="result-snippet">{result.snippet}</p>
-                    )}
-                  </div>
-                  <div className="result-score">{(result.score * 100).toFixed(0)}%</div>
+        <div className="search-bar-wrap">
+          <SearchBar
+            inputRef={inputRef}
+            value={localQuery}
+            onChange={setLocalQuery}
+            onSubmit={handleSearch}
+            isSearching={isSearching}
+          />
+        </div>
+
+        <section className="search-results" aria-label="Search results">
+          <div className="search-results-scroll sage-scroll">
+            {isSearching ? (
+              <div className="search-loading-overlay" aria-live="polite" aria-busy="true">
+                <div className="search-loading-pill">
+                  <span className="search-loading-spinner" aria-hidden="true" />
+                  <span className="search-loading-text">Searching...</span>
                 </div>
-              ))}
-            </div>
+              </div>
+            ) : null}
+            {searchQuery && !isSearching && results.length === 0 ? (
+              <div className="search-no-results">No results found for "{searchQuery}"</div>
+            ) : (
+              <div className="search-results-list">
+                {results.map((result, index) => (
+                  <ResultCard
+                    key={`${result?.path || result?.filename || 'result'}-${index}`}
+                    title={result?.filename || result?.path}
+                    snippet={result?.snippet}
+                    score={typeof result?.score === 'number' ? result.score : undefined}
+                    path={result?.path}
+                    onOpen={handleOpenFile}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-        )}
-
-        {searchQuery && searchResults && searchResults.length === 0 && !isSearching && (
-          <div className="search-no-results">
-            <p>No results found for "{searchQuery}"</p>
-          </div>
-        )}
-      </div>
-
-      {/* Footer */}
-      <div className="search-footer">
-        © 2025 SAGE. All rights reserved by Aravind
-      </div>
+        </section>
+      </main>
     </div>
   );
 }
