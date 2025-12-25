@@ -1,111 +1,153 @@
-# 🧠 SAGE – Semantic Analysis & Guided Exploration
+<p align="center">
+  <img src="app-ui/logo/SageNoBG.png" alt="SAGE Logo" width="120" />
+</p>
 
-SAGE is a **local-first semantic file search engine** designed to index personal documents efficiently and search them using semantic similarity — not filenames or keywords alone.
+<h1 align="center">🧠 SAGE</h1>
+<h3 align="center">Semantic Analysis & Guided Exploration</h3>
 
-This project is built to be **fast, predictable, and private**:
+<p align="center">
+  <strong>A local-first semantic file search engine that understands your documents.</strong>
+</p>
 
-* Runs entirely on your machine
-* No cloud dependency
-* No full re-indexing on restart
-* Incremental updates in real time
-
----
-
-## Core Principles (Non‑Negotiable)
-
-SAGE strictly follows these behaviors:
-
-### 1. Cold Start Indexing
-
-* First-ever run on a machine
-* Full scan of user-selected folders
-* Slow is acceptable (one-time cost)
-
-### 2. Warm Start Indexing
-
-* App restarted later
-* **Must be fast**
-* Skips unchanged files using SQLite state
-* Indexes only new / modified / deleted files
-
-### 3. Live Updates (Runtime)
-
-* Uses filesystem Watchdog
-* Detects file add / modify / delete
-* Incremental updates only
-* No full rescans
-* No model reload per event
-
-SQLite is the **source of truth** for file state.
-Weaviate stores **only vectors**.
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10+-blue?logo=python" alt="Python" />
+  <img src="https://img.shields.io/badge/React-18-61DAFB?logo=react" alt="React" />
+  <img src="https://img.shields.io/badge/Electron-Latest-47848F?logo=electron" alt="Electron" />
+  <img src="https://img.shields.io/badge/Weaviate-4.x-00D1A0?logo=weaviate" alt="Weaviate" />
+  <img src="https://img.shields.io/badge/License-MIT-green" alt="License" />
+</p>
 
 ---
 
-## Supported File Types
+## ✨ What is SAGE?
 
-Currently supported:
+SAGE is a **privacy-first semantic search engine** for your personal documents. Unlike traditional file search that relies on filenames and keywords, SAGE understands the *meaning* of your content.
 
-* `.txt`
-* `.pdf` (text-based)
-* `.pdf` (scanned PDFs via OCR fallback)
-* `.docx`
+**Ask questions like:**
+- "Notes about machine learning optimization"
+- "Documents discussing project deadlines"
+- "Research papers on neural networks"
 
-Planned:
-
-* `.ppt` / `.pptx`
+SAGE finds relevant files even if they don't contain your exact search terms.
 
 ---
 
-## Tech Stack
+## 🎯 Key Features
+
+| Feature | Description |
+|---------|-------------|
+| 🔒 **100% Local** | All data stays on your machine. No cloud. No telemetry. |
+| 🧠 **Semantic Search** | Finds documents by meaning, not just keywords |
+| ⚡ **Hybrid Search** | Combines semantic similarity with keyword matching |
+| 📁 **Multi-Format** | Supports TXT, PDF (text & scanned), DOCX |
+| 🔄 **Real-Time Sync** | Watches folders and auto-indexes new/changed files |
+| 🚀 **Fast Restarts** | Warm start indexing skips unchanged files |
+| 🎨 **Modern UI** | Beautiful glassmorphic Electron interface |
+
+---
+
+## 🏗️ Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     SAGE Architecture                        │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│   ┌──────────────┐     ┌──────────────┐     ┌────────────┐  │
+│   │   Electron   │────▶│   FastAPI    │────▶│  Weaviate  │  │
+│   │   Frontend   │     │   Backend    │     │  Vectors   │  │
+│   └──────────────┘     └──────────────┘     └────────────┘  │
+│         │                    │                     │         │
+│         │              ┌─────┴─────┐               │         │
+│         │              │           │               │         │
+│         ▼              ▼           ▼               ▼         │
+│   ┌──────────┐   ┌──────────┐ ┌──────────┐  ┌──────────┐   │
+│   │  React   │   │  SQLite  │ │ Watchdog │  │ Sentence │   │
+│   │   UI     │   │  State   │ │ Monitor  │  │Transform │   │
+│   └──────────┘   └──────────┘ └──────────┘  └──────────┘   │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Data Flow:**
+1. **Indexing**: Files → Chunking → Embedding → Weaviate
+2. **Search**: Query → Embedding → Vector Search → Hybrid Ranking → Results
+3. **Sync**: File changes → Watchdog → Incremental update
+
+---
+
+## 🛠️ Tech Stack
 
 ### Backend
+| Technology | Purpose |
+|------------|---------|
+| Python 3.10+ | Core runtime |
+| FastAPI | REST API server |
+| Uvicorn | ASGI server |
+| sentence-transformers | Embedding model (`all-MiniLM-L6-v2`) |
+| Weaviate | Vector database |
+| SQLite | Index state management |
+| Watchdog | Filesystem monitoring |
+| PyMuPDF | PDF extraction |
+| python-docx | Word document extraction |
+| Tesseract OCR | Scanned PDF fallback |
 
-* Python
-* FastAPI
-* Uvicorn
-* sentence-transformers (`all-MiniLM-L6-v2`, CPU)
-* watchdog (filesystem monitoring)
-* SQLite (index state)
-* PyMuPDF / python-docx / Tesseract OCR
-
-### Vector Database
-
-* Weaviate OSS (v4.x)
-* Manual vectors (no built-in vectorizer)
+### Frontend
+| Technology | Purpose |
+|------------|---------|
+| Electron | Desktop app shell |
+| React 18 | UI framework |
+| Vite | Build tool |
+| CSS3 | Custom glassmorphic theme |
 
 ---
 
-## Repository Structure
+## 📂 Project Structure
 
 ```
 SAGE/
-│
-├── app.py                 # FastAPI search API
-├── search.py              # Semantic search + ranking
-├── index_docs.py          # Smart indexer (cold / warm start)
-├── file_watcher.py        # Watchdog-based incremental updates
+├── app.py                 # FastAPI application entry
+├── search.py              # Semantic + hybrid search logic
+├── index_docs.py          # Document indexer (cold/warm start)
+├── indexer_core.py        # Core indexing functions
+├── file_watcher.py        # Real-time file monitoring
 ├── embed_server.py        # Embedding service
+├── add_root.py            # CLI: Add folder to index
+├── seed_roots.py          # CLI: Seed initial folders
+├── start_api.bat          # Windows batch launcher
+├── requirements.txt       # Python dependencies
+│
 ├── backend/
-│   └── main.py            # Backend entry
+│   └── main.py            # Backend module entry
 │
-├── app-ui/                # UI / Electron frontend
-│   ├── index.html
-│   ├── main.js
-│   ├── preload.js
-│   └── renderer.js
+├── extractors/            # File content extractors
 │
-├── requirements.txt
-├── .gitignore
-└── README.md
+├── app-ui/                # Electron + React frontend
+│   ├── electron/          # Electron main/preload
+│   ├── src/
+│   │   ├── App.jsx
+│   │   ├── api/           # Backend API client
+│   │   ├── components/    # Reusable UI components
+│   │   ├── screens/       # App screens
+│   │   ├── state/         # Global state management
+│   │   └── theme/         # CSS styles
+│   ├── logo/              # App icons/logos
+│   └── package.json
+│
+├── weaviate_data/         # Weaviate persistent storage
+└── sage_env/              # Python virtual environment
 ```
-
-> **Note:**
->
-> * Virtual environments, ML models, user documents, and runtime data are intentionally NOT committed.
 
 ---
 
-## Installation
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Python 3.10 or higher
+- Node.js 18+ and npm
+- Docker (for Weaviate) OR Weaviate binary
+- Tesseract OCR (optional, for scanned PDFs)
 
 ### 1. Clone the Repository
 
@@ -114,115 +156,263 @@ git clone https://github.com/aravndnair/SAGE.git
 cd SAGE
 ```
 
-### 2. Create Virtual Environment
+### 2. Backend Setup
 
 ```bash
+# Create virtual environment
 python -m venv sage_env
-sage_env\Scripts\activate   # Windows
-```
 
-### 3. Install Dependencies
+# Activate (Windows)
+sage_env\Scripts\activate
 
-```bash
+# Activate (macOS/Linux)
+source sage_env/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-### 4. Install External Dependencies
+### 3. Start Weaviate
 
-* **Weaviate (local)**
-
-  * Run via Docker or local binary
-* **Tesseract OCR** (for scanned PDFs)
-
-  * Add `tesseract` to system PATH
-
----
-
-## First Run (Indexing)
-
-1. Configure user root folders (one-time)
-2. Run the indexer:
-
+Using Docker:
 ```bash
-python index_docs.py
+docker run -d \
+  --name weaviate \
+  -p 8080:8080 \
+  -v weaviate_data:/var/lib/weaviate \
+  semitechnologies/weaviate:latest
 ```
 
-This performs a **cold start** index.
+### 4. Frontend Setup
 
-Subsequent runs will be **fast warm starts**.
+```bash
+cd app-ui
+npm install
+npm run build
+```
 
----
+### 5. Run SAGE
 
-## Live File Monitoring
+**Terminal 1 - Backend API:**
+```bash
+python app.py
+# or
+uvicorn app:app --reload
+```
 
-Start Watchdog:
-
+**Terminal 2 - File Watcher (optional):**
 ```bash
 python file_watcher.py
 ```
 
-Behavior:
-
-* New file → indexed
-* Modified file → reindexed
-* Deleted file → vectors removed
-
-No full rescans. No restarts required.
+**Terminal 3 - Electron App:**
+```bash
+cd app-ui
+npm run electron
+```
 
 ---
 
-## Running the Search API
+## 📖 Usage Guide
 
-```bash
-uvicorn app:app
+### First Time Setup
+
+1. Launch the app - you'll see the welcome screen
+2. Enter your name
+3. Go to **Settings** → Add folders to index
+4. Click **Save & Index** - SAGE will process your documents
+5. Start searching!
+
+### Searching
+
+- Type natural language queries
+- Press `Enter` or click **Search**
+- Click any result to open the file
+- Use `Ctrl+K` to focus the search bar
+
+### Managing Indexed Folders
+
+- **Settings** → Add up to 5 folders
+- Remove folders by clicking the ✕ button
+- Changes require re-indexing to take effect
+
+### Viewing Search History
+
+- Click **Indexing Logs** in Settings
+- View previous search results
+- Clear logs when needed
+
+---
+
+## ⚙️ Configuration
+
+### Hybrid Search Tuning
+
+Edit `search.py`:
+```python
+ENABLE_HYBRID = True      # Enable/disable hybrid mode
+SEMANTIC_WEIGHT = 0.8     # Semantic similarity weight
+KEYWORD_WEIGHT = 0.2      # Keyword match weight
 ```
 
-Open Swagger UI:
+### Supported File Types
 
+| Extension | Support Level |
+|-----------|--------------|
+| `.txt` | ✅ Full |
+| `.pdf` | ✅ Full (text + OCR fallback) |
+| `.docx` | ✅ Full |
+| `.pptx` | 🚧 Planned |
+
+---
+
+## 🔧 API Reference
+
+### Base URL
 ```
-http://127.0.0.1:8000/docs
+http://127.0.0.1:8000
 ```
 
-### Example Search Request
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/` | Health check |
+| `GET` | `/status` | Server status |
+| `POST` | `/search` | Semantic search |
+| `GET` | `/roots` | List indexed folders |
+| `POST` | `/roots/add` | Add folder to index |
+| `POST` | `/roots/remove` | Remove folder |
+| `POST` | `/index` | Trigger indexing |
+
+### Search Request
 
 ```json
 POST /search
 {
-  "query": "resolution and unification",
-  "top_k": 5,
-  "roots": ["C:\\YourFolder"]
+  "query": "machine learning notes",
+  "top_k": 10
+}
+```
+
+### Search Response
+
+```json
+{
+  "results": [
+    {
+      "file": "ml_notes.pdf",
+      "path": "C:\\Documents\\ml_notes.pdf",
+      "snippet": "Neural networks are computational models...",
+      "similarity": 0.8542,
+      "hybrid_score": 0.8834
+    }
+  ]
 }
 ```
 
 ---
 
-## Design Decisions (Why This Works)
+## 🎨 UI Screens
 
-* SQLite guarantees deterministic indexing state
-* Weaviate handles only vector similarity
-* Indexing is decoupled from search
-* OCR is fallback-only to avoid unnecessary cost
-* No background magic — behavior is predictable
-
----
-
-## Project Status
-
-✅ Backend indexing **locked and complete**
-✅ Incremental updates verified
-✅ Deletion handling verified
-🚧 UI / Electron polish in progress
+| Screen | Description |
+|--------|-------------|
+| **Welcome** | First-run hello animation |
+| **Name Input** | User personalization |
+| **Setup Complete** | Celebration with confetti 🎉 |
+| **Search** | Main search interface |
+| **Settings** | Folder management |
+| **Indexing Logs** | Search history |
+| **Profile** | User settings |
 
 ---
 
-## License
+## 🔒 Privacy & Security
 
-MIT License
+- **Zero cloud dependencies** - Everything runs locally
+- **No telemetry** - We don't collect any data
+- **Your files stay yours** - Documents never leave your machine
+- **Open source** - Audit the code yourself
 
 ---
 
-## Author
+## 🐛 Troubleshooting
 
-Aravind Nair
+### "Cannot connect to backend"
+- Ensure `python app.py` is running on port 8000
+- Check if another process is using the port
 
-This project prioritizes **correctness first, polish second**.
+### "No results found"
+- Verify folders are added in Settings
+- Run indexing after adding folders
+- Check if files are in supported formats
+
+### "Weaviate connection failed"
+- Ensure Weaviate is running (`docker ps`)
+- Default port is 8080
+
+### Search input not working
+- Restart the Electron app
+- Clear indexing logs and try again
+
+---
+
+## 🗺️ Roadmap
+
+- [x] Core semantic search
+- [x] Hybrid search (semantic + keyword)
+- [x] Real-time file monitoring
+- [x] Electron desktop app
+- [x] Glassmorphic UI design
+- [x] Onboarding flow
+- [ ] PowerPoint (.pptx) support
+- [ ] Excel (.xlsx) support
+- [ ] Search filters & advanced options
+- [ ] In-app file preview
+- [ ] App packaging & distribution
+- [ ] Cross-platform builds (macOS, Linux)
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## 👤 Author
+
+**Aravind Nair**
+
+- GitHub: [@aravndnair](https://github.com/aravndnair)
+
+---
+
+## 🙏 Acknowledgments
+
+- [Sentence Transformers](https://www.sbert.net/) for embedding models
+- [Weaviate](https://weaviate.io/) for vector database
+- [Electron](https://www.electronjs.org/) for desktop framework
+- [React](https://react.dev/) for UI framework
+
+---
+
+<p align="center">
+  <strong>Built with ❤️ for privacy-conscious users</strong>
+</p>
+
+<p align="center">
+  <sub>© 2025 Aravind Nair. All rights reserved.</sub>
+</p>
