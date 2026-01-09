@@ -3,6 +3,7 @@ import sys
 import os
 import sqlite3
 import threading
+from contextlib import asynccontextmanager
 from typing import List, Optional
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,9 +31,32 @@ indexing_in_progress = False
 watchdog_observer = None
 
 # =========================
+# LIFESPAN (Startup/Shutdown)
+# =========================
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Modern lifespan handler for startup/shutdown events"""
+    # === STARTUP ===
+    print("🔵 Initializing SAGE backend...")
+    # Ensure database tables exist
+    index_docs.init_db()
+    # Clean up any duplicate roots from previous runs
+    cleanup_duplicate_roots()
+    # Start watchdog monitoring
+    start_watchdog()
+    print("✅ Backend ready")
+    
+    yield  # App runs here
+    
+    # === SHUTDOWN ===
+    print("🔻 Shutting down SAGE backend...")
+    stop_watchdog()
+
+
+# =========================
 # FASTAPI SETUP
 # =========================
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 # Enable CORS for Electron app
 app.add_middleware(
@@ -422,29 +446,6 @@ def is_sensitive_text(text: str | None) -> bool:
         return False
     t = text.lower()
     return any(w in t for w in SENSITIVE_WORDS)
-
-
-# =========================
-# STARTUP / SHUTDOWN
-# =========================
-@app.on_event("startup")
-async def startup_event():
-    """Initialize database on startup"""
-    print("🔵 Initializing SAGE backend...")
-    # Ensure database tables exist
-    index_docs.init_db()
-    # Clean up any duplicate roots from previous runs
-    cleanup_duplicate_roots()
-    # Start watchdog monitoring
-    start_watchdog()
-    print("✅ Backend ready")
-
-
-@app.on_event("shutdown")
-def shutdown_event():
-    """Clean shutdown"""
-    print("🔻 Shutting down SAGE backend...")
-    stop_watchdog()
 
 
 # =========================

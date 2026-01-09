@@ -1,3 +1,4 @@
+import time
 from sentence_transformers import SentenceTransformer
 import weaviate
 import sqlite3
@@ -32,12 +33,24 @@ def get_model():
         _model = SentenceTransformer(EMBED_MODEL)
     return _model
 
-def get_weaviate_client():
-    """Lazy connect to Weaviate"""
+def get_weaviate_client(max_retries=3, retry_delay=2):
+    """Lazy connect to Weaviate with retry logic"""
     global _client, _collection
     if _client is None:
-        _client = weaviate.connect_to_local()
-        _collection = _client.collections.get(CLASS_NAME)
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                _client = weaviate.connect_to_local()
+                _collection = _client.collections.get(CLASS_NAME)
+                return _client, _collection
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    print(f"⚠️ Weaviate connection attempt {attempt + 1} failed, retrying in {retry_delay}s...")
+                    time.sleep(retry_delay)
+                else:
+                    print(f"❌ Weaviate connection failed after {max_retries} attempts")
+                    raise last_error
     return _client, _collection
 
 def get_collection():
