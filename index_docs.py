@@ -216,7 +216,7 @@ def main():
                 Property(name="path", data_type=DataType.TEXT),
                 Property(name="chunk", data_type=DataType.TEXT),
             ],
-            vector_config=Configure.Vectors.none(),
+            vectorizer_config=Configure.Vectorizer.none(),
         )
         print("[DONE] Schema created")
     else:

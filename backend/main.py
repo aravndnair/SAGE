@@ -21,7 +21,8 @@ import index_docs
 # CONFIG
 # =========================
 INDEX_DB = "index_state.db"
-SENSITIVE_WORDS = {"password", "license", "serial", "activation", "key", "recovery", "private", "secret"}
+# Removed "key", "private", "secret" as they appear in legitimate crypto/security documents
+SENSITIVE_WORDS = {"password", "license key", "serial number", "activation code", "recovery phrase"}
 ALLOWED_EXT = (".txt", ".pdf", ".docx", ".ppt", ".pptx")
 
 # Global flags

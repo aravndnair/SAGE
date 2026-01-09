@@ -19,11 +19,31 @@ FETCH_BUFFER = 10         # Fetch top_k * FETCH_BUFFER for deduplication
 # --------------------------------------
 
 
-# -------- INIT (loaded once) --------
+# -------- LAZY INIT --------
 
-model = SentenceTransformer(EMBED_MODEL)
-client = weaviate.connect_to_local()
-collection = client.collections.get(CLASS_NAME)
+_model = None
+_client = None
+_collection = None
+
+def get_model():
+    """Lazy load the embedding model"""
+    global _model
+    if _model is None:
+        _model = SentenceTransformer(EMBED_MODEL)
+    return _model
+
+def get_weaviate_client():
+    """Lazy connect to Weaviate"""
+    global _client, _collection
+    if _client is None:
+        _client = weaviate.connect_to_local()
+        _collection = _client.collections.get(CLASS_NAME)
+    return _client, _collection
+
+def get_collection():
+    """Get the Weaviate collection (connects if needed)"""
+    _, collection = get_weaviate_client()
+    return collection
 
 # -----------------------------------
 
@@ -83,6 +103,10 @@ def semantic_search(
 
     # ---- Parse query for keyword matching ----
     query_terms = query.lower().split() if ENABLE_HYBRID else []
+
+    # ---- Get model and collection (lazy init) ----
+    model = get_model()
+    collection = get_collection()
 
     # ---- Semantic vector search ----
     query_vector = model.encode(query).tolist()
