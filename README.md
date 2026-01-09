@@ -262,7 +262,7 @@ KEYWORD_WEIGHT = 0.2      # Keyword match weight
 | `.txt` | ✅ Full |
 | `.pdf` | ✅ Full (text + OCR fallback) |
 | `.docx` | ✅ Full |
-| `.pptx` | 🚧 Planned |
+| `.pptx` | ✅ Full |
 
 ---
 
