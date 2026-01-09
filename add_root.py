@@ -3,7 +3,7 @@ import sqlite3
 DB = "index_state.db"
 ROOT = r"C:\SageTest"   # <-- change this if needed
 
-conn = sqlite3.connect(DB)
+conn = sqlite3.connect(DB, timeout=30)
 cur = conn.cursor()
 
 cur.execute("CREATE TABLE IF NOT EXISTS user_roots (path TEXT PRIMARY KEY)")

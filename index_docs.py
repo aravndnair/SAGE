@@ -169,7 +169,7 @@ def chunk_text(text: str) -> List[str]:
 # -------- SQLITE --------
 
 def init_db():
-    conn = sqlite3.connect(INDEX_DB)
+    conn = sqlite3.connect(INDEX_DB, timeout=30)
     cur = conn.cursor()
 
     cur.execute("""

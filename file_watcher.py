@@ -13,7 +13,7 @@ ALLOWED_EXT = (".txt", ".pdf", ".docx", ".ppt", ".pptx")
 
 
 def load_user_roots():
-    conn = sqlite3.connect(INDEX_DB)
+    conn = sqlite3.connect(INDEX_DB, timeout=30)
     cur = conn.cursor()
     cur.execute("SELECT path FROM user_roots")
     roots = [row[0] for row in cur.fetchall()]

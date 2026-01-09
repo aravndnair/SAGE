@@ -85,8 +85,8 @@ class RootRequest(BaseModel):
 # DATABASE HELPERS
 # =========================
 def get_db_connection():
-    """Get SQLite connection to index_state.db"""
-    return sqlite3.connect(INDEX_DB)
+    """Get SQLite connection to index_state.db with timeout for concurrent access"""
+    return sqlite3.connect(INDEX_DB, timeout=30)
 
 def normalize_path(path: str) -> str:
     """Normalize path: remove trailing slashes, resolve to absolute"""
