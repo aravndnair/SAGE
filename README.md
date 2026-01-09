@@ -6,7 +6,7 @@
 <h3 align="center">Semantic Analysis & Guided Exploration</h3>
 
 <p align="center">
-  <strong>Your personal AI-powered semantic search engine for local documents</strong>
+  <strong>SAGE is an offline semantic search tool that indexes local documents, generates embeddings, and retrieves relevant results using a Weaviate vector database and a desktop UI built with Electron</strong>
 </p>
 
 <p align="center">
