@@ -28,7 +28,10 @@ ALLOWED_EXT = (".txt", ".pdf", ".docx", ".ppt", ".pptx")
 
 # Global flags
 indexing_in_progress = False
+indexing_lock = threading.Lock()
 watchdog_observer = None
+last_watchdog_trigger = 0
+WATCHDOG_DEBOUNCE_SECONDS = 3  # Minimum seconds between indexing triggers
 
 # =========================
 # LIFESPAN (Startup/Shutdown)
@@ -176,8 +179,14 @@ def cleanup_duplicate_roots():
 # INDEXING CONTROL
 # =========================
 def run_indexing_background():
-    """Run indexing in background thread"""
+    """Run indexing in background thread with lock to prevent concurrent runs"""
     global indexing_in_progress
+    
+    # Try to acquire lock - if already running, skip
+    if not indexing_lock.acquire(blocking=False):
+        print("⏳ Indexing already in progress, skipping...")
+        return
+    
     try:
         indexing_in_progress = True
         print("🔵 Starting indexing...")
@@ -188,6 +197,7 @@ def run_indexing_background():
         traceback.print_exc()
     finally:
         indexing_in_progress = False
+        indexing_lock.release()
 
 
 # =========================
@@ -226,7 +236,23 @@ class SageEventHandler(FileSystemEventHandler):
         self.handle_event("deleted", path)
 
     def handle_event(self, action, path):
-        """Trigger re-indexing when files change"""
+        """Trigger re-indexing when files change (with debounce)"""
+        global last_watchdog_trigger
+        import time as time_module
+        
+        # Skip temporary files (like ~$word files)
+        filename = os.path.basename(path)
+        if filename.startswith('~$'):
+            return
+        
+        current_time = time_module.time()
+        
+        # Debounce: skip if triggered too recently
+        if current_time - last_watchdog_trigger < WATCHDOG_DEBOUNCE_SECONDS:
+            print(f"📡 Watchdog: {action.upper()} - {filename} (debounced)")
+            return
+        
+        last_watchdog_trigger = current_time
         print(f"📡 Watchdog: {action.upper()} - {path}")
         # Run indexing in background to avoid blocking
         threading.Thread(target=run_indexing_background, daemon=True).start()
