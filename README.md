@@ -32,6 +32,28 @@ SAGE finds relevant files even if they don't contain your exact search terms.
 
 ---
 
+## 📸 Screenshots
+
+<p align="center">
+  <img src="screenshots/search-results.png" alt="Search Results" width="800" />
+  <br />
+  <em>Semantic search in action - finding cardiac care documents by meaning</em>
+</p>
+
+<p align="center">
+  <img src="screenshots/directory-management.png" alt="Directory Management" width="800" />
+  <br />
+  <em>Manage up to 5 monitored folders for indexing</em>
+</p>
+
+<p align="center">
+  <img src="screenshots/search-loading.png" alt="Search Loading" width="800" />
+  <br />
+  <em>Beautiful glassmorphic UI with smooth loading states</em>
+</p>
+
+---
+
 ## 🎯 Key Features
 
 | Feature | Description |
