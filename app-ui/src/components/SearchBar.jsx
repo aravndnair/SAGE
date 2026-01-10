@@ -29,7 +29,7 @@ export default function SearchBar({
 						ref={inputRef}
 						className="search-bar-input"
 						type="text"
-						placeholder="Ask a question or search for files..."
+						placeholder="Search files here"
 						value={value}
 						onChange={(e) => onChange?.(e.target.value)}
 						onKeyDown={handleKeyDown}

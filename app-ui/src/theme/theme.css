@@ -1527,6 +1527,122 @@ textarea {
   transform: translateY(0);
 }
 
+/* ========== CONFIRMATION MODAL ========== */
+.confirm-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.confirm-modal {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-2xl);
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 
+    0 20px 60px rgba(0, 0, 0, 0.15),
+    0 0 0 1px rgba(0, 0, 0, 0.05);
+  animation: modalSlideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes modalSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.confirm-modal-icon {
+  margin-bottom: var(--spacing-lg);
+}
+
+.confirm-modal-title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-sm);
+}
+
+.confirm-modal-text {
+  font-size: var(--font-size-base);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-md);
+  line-height: 1.5;
+}
+
+.confirm-modal-path {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+  background: rgba(0, 0, 0, 0.04);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-md);
+  word-break: break-all;
+  margin-bottom: var(--spacing-xl);
+  font-family: 'SF Mono', 'Consolas', monospace;
+}
+
+.confirm-modal-actions {
+  display: flex;
+  gap: var(--spacing-md);
+  justify-content: center;
+}
+
+.confirm-modal-btn {
+  padding: var(--spacing-md) var(--spacing-xl);
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  min-width: 120px;
+}
+
+.confirm-modal-btn--cancel {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--color-text-primary);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.confirm-modal-btn--cancel:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.confirm-modal-btn--confirm {
+  background: var(--color-danger);
+  color: white;
+  border: none;
+}
+
+.confirm-modal-btn--confirm:hover {
+  background: #e5342a;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(255, 59, 48, 0.3);
+}
+
+.confirm-modal-btn--confirm:active {
+  transform: translateY(0);
+}
+
 .indexinglogs-list {
   display: grid;
   gap: 12px;
@@ -2128,39 +2244,205 @@ textarea {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.45;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f5f7fa 0%, #eef2f7 50%, #f7f5fa 100%);
 }
 
+/* Morphing blob 1 - Blue */
 .search-ambient-blob {
   position: absolute;
-  width: 55vw;
-  height: 55vw;
-  border-radius: var(--radius-full);
-  filter: blur(120px);
-  transform: translate3d(0, 0, 0);
+  filter: blur(80px);
+  opacity: 0.45;
   mix-blend-mode: multiply;
+  will-change: transform, border-radius, filter;
 }
 
 .search-ambient-blob--primary {
-  top: -18%;
-  left: -18%;
-  background: var(--color-primary);
-  animation: pulseGlow 2.4s ease-in-out infinite;
+  width: 50vw;
+  height: 50vw;
+  top: -10%;
+  left: -10%;
+  background: linear-gradient(180deg, #60a5fa 0%, #3b82f6 50%, #818cf8 100%);
+  border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+  animation: 
+    morphShape1 15s ease-in-out infinite,
+    floatAround1 20s ease-in-out infinite,
+    smoothColorShift 20s linear infinite;
 }
 
 .search-ambient-blob--secondary {
-  bottom: -18%;
-  right: -18%;
-  background: var(--gradient-purple);
+  width: 55vw;
+  height: 55vw;
+  bottom: -15%;
+  right: -15%;
+  background: linear-gradient(180deg, #c084fc 0%, #a855f7 50%, #ec4899 100%);
+  border-radius: 40% 60% 70% 30% / 40% 70% 30% 60%;
+  animation: 
+    morphShape2 18s ease-in-out infinite,
+    floatAround2 25s ease-in-out infinite,
+    smoothColorShift 25s linear infinite reverse;
 }
 
-@keyframes pulseGlow {
-  0%,
+/* Third blob for more depth */
+.search-ambient::before {
+  content: '';
+  position: absolute;
+  width: 40vw;
+  height: 40vw;
+  top: 30%;
+  left: 50%;
+  background: linear-gradient(180deg, #f472b6 0%, #e879f9 50%, #a78bfa 100%);
+  border-radius: 70% 30% 50% 50% / 30% 60% 40% 70%;
+  filter: blur(90px);
+  opacity: 0.3;
+  mix-blend-mode: multiply;
+  animation: 
+    morphShape3 12s ease-in-out infinite,
+    floatAround3 18s ease-in-out infinite,
+    smoothColorShift 15s linear infinite;
+  will-change: transform, border-radius, filter;
+}
+
+/* Fourth blob - subtle cyan accent */
+.search-ambient::after {
+  content: '';
+  position: absolute;
+  width: 35vw;
+  height: 35vw;
+  top: 60%;
+  left: 10%;
+  background: linear-gradient(180deg, #67e8f9 0%, #22d3ee 50%, #60a5fa 100%);
+  border-radius: 50% 50% 30% 70% / 60% 40% 60% 40%;
+  filter: blur(100px);
+  opacity: 0.25;
+  mix-blend-mode: multiply;
+  animation: 
+    morphShape4 14s ease-in-out infinite,
+    floatAround4 22s ease-in-out infinite,
+    smoothColorShift 30s linear infinite reverse;
+  will-change: transform, border-radius, filter;
+}
+
+/* Smooth color transition using hue-rotate */
+@keyframes smoothColorShift {
+  0% {
+    filter: blur(80px) hue-rotate(0deg);
+  }
   100% {
-    opacity: 0.75;
+    filter: blur(80px) hue-rotate(360deg);
+  }
+}
+
+/* Shape morphing animations */
+@keyframes morphShape1 {
+  0%, 100% {
+    border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%;
+  }
+  25% {
+    border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%;
   }
   50% {
-    opacity: 0.45;
+    border-radius: 50% 60% 30% 60% / 30% 40% 70% 50%;
+  }
+  75% {
+    border-radius: 40% 30% 60% 50% / 60% 50% 40% 60%;
+  }
+}
+
+@keyframes morphShape2 {
+  0%, 100% {
+    border-radius: 40% 60% 70% 30% / 40% 70% 30% 60%;
+  }
+  25% {
+    border-radius: 70% 30% 50% 50% / 30% 30% 70% 70%;
+  }
+  50% {
+    border-radius: 30% 50% 70% 40% / 60% 40% 50% 60%;
+  }
+  75% {
+    border-radius: 60% 40% 30% 70% / 50% 60% 40% 30%;
+  }
+}
+
+@keyframes morphShape3 {
+  0%, 100% {
+    border-radius: 70% 30% 50% 50% / 30% 60% 40% 70%;
+  }
+  33% {
+    border-radius: 40% 60% 30% 70% / 60% 30% 70% 40%;
+  }
+  66% {
+    border-radius: 50% 50% 60% 40% / 40% 50% 50% 60%;
+  }
+}
+
+@keyframes morphShape4 {
+  0%, 100% {
+    border-radius: 50% 50% 30% 70% / 60% 40% 60% 40%;
+  }
+  50% {
+    border-radius: 30% 70% 60% 40% / 40% 60% 40% 60%;
+  }
+}
+
+/* Movement animations */
+@keyframes floatAround1 {
+  0%, 100% {
+    transform: translate(0%, 0%) rotate(0deg) scale(1);
+  }
+  25% {
+    transform: translate(15%, 20%) rotate(10deg) scale(1.1);
+  }
+  50% {
+    transform: translate(5%, 35%) rotate(-5deg) scale(0.95);
+  }
+  75% {
+    transform: translate(20%, 10%) rotate(15deg) scale(1.05);
+  }
+}
+
+@keyframes floatAround2 {
+  0%, 100% {
+    transform: translate(0%, 0%) rotate(0deg) scale(1);
+  }
+  20% {
+    transform: translate(-20%, -15%) rotate(-10deg) scale(1.05);
+  }
+  40% {
+    transform: translate(-10%, -30%) rotate(5deg) scale(1.1);
+  }
+  60% {
+    transform: translate(-25%, -10%) rotate(-15deg) scale(0.95);
+  }
+  80% {
+    transform: translate(-5%, -20%) rotate(10deg) scale(1);
+  }
+}
+
+@keyframes floatAround3 {
+  0%, 100% {
+    transform: translate(-50%, 0%) rotate(0deg) scale(1);
+  }
+  25% {
+    transform: translate(-40%, -20%) rotate(15deg) scale(1.15);
+  }
+  50% {
+    transform: translate(-60%, 10%) rotate(-10deg) scale(0.9);
+  }
+  75% {
+    transform: translate(-45%, -10%) rotate(5deg) scale(1.1);
+  }
+}
+
+@keyframes floatAround4 {
+  0%, 100% {
+    transform: translate(0%, 0%) rotate(0deg) scale(1);
+  }
+  33% {
+    transform: translate(30%, -25%) rotate(-15deg) scale(1.2);
+  }
+  66% {
+    transform: translate(15%, 15%) rotate(10deg) scale(0.9);
   }
 }
 
@@ -2511,6 +2793,7 @@ textarea {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
 }
 
 .search-filters {
@@ -2548,6 +2831,22 @@ textarea {
   padding-bottom: 40px;
   padding-right: 8px;
   margin-right: -8px;
+}
+
+/* Fade mask only when scrolled - content fades as it scrolls up */
+.search-results.is-scrolled .search-results-scroll {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0px,
+    black 40px,
+    black 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0px,
+    black 40px,
+    black 100%
+  );
 }
 
 .search-results-list {

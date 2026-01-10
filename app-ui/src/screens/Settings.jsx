@@ -12,6 +12,7 @@ export default function Settings() {
   const [localRoutes, setLocalRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAcknowledgement, setShowAcknowledgement] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null); // { index, path }
 
   const initials = useMemo(() => {
     const name = (userName || 'User').trim();
@@ -58,16 +59,33 @@ export default function Settings() {
   };
 
   const handleRemove = (index) => {
-    const newRoutes = localRoutes.filter((_, i) => i !== index);
-    setLocalRoutes(newRoutes);
+    setConfirmDelete({ index, path: localRoutes[index] });
+  };
+
+  const confirmRemove = async () => {
+    if (confirmDelete !== null) {
+      const pathToRemove = confirmDelete.path;
+      const newRoutes = localRoutes.filter((_, i) => i !== confirmDelete.index);
+      
+      // Immediately remove from backend
+      try {
+        await apiRemoveRoute(pathToRemove);
+        setLocalRoutes(newRoutes);
+        saveRoutes(newRoutes);
+      } catch (error) {
+        console.error('Failed to remove route:', error);
+        alert('Failed to remove directory. Please try again.');
+      }
+      
+      setConfirmDelete(null);
+    }
+  };
+
+  const cancelRemove = () => {
+    setConfirmDelete(null);
   };
 
   const handleSave = () => {
-    if (localRoutes.length === 0) {
-      alert('Please add at least one folder');
-      return;
-    }
-    
     setPendingRoutes(localRoutes);
     setShowAcknowledgement(true);
   };
@@ -79,6 +97,34 @@ export default function Settings() {
   return (
     <div className="settings-screen">
       <div className="settings-backdrop" aria-hidden="true" />
+
+      {/* Confirmation Modal */}
+      {confirmDelete !== null && (
+        <div className="confirm-modal-overlay" onClick={cancelRemove}>
+          <div className="confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-modal-icon">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ff3b30" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+            <h3 className="confirm-modal-title">Remove Directory?</h3>
+            <p className="confirm-modal-text">
+              Are you sure you want to remove this directory from monitoring?
+            </p>
+            <p className="confirm-modal-path">{confirmDelete.path}</p>
+            <div className="confirm-modal-actions">
+              <button className="confirm-modal-btn confirm-modal-btn--cancel" onClick={cancelRemove}>
+                Cancel
+              </button>
+              <button className="confirm-modal-btn confirm-modal-btn--confirm" onClick={confirmRemove}>
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <main className="settings-frame settings-animate-fade-in" aria-label="Settings">
         <aside className="settings-aside">

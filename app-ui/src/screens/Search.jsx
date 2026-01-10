@@ -12,7 +12,9 @@ export default function Search() {
   const { setScreen, searchQuery, setSearchQuery, searchResults, setSearchResults, setIndexingLogs, isSearching, setIsSearching, routes, userName, saveRoutes } = useApp();
   const [localQuery, setLocalQuery] = useState('');
   const [routesLoading, setRoutesLoading] = useState(true);
+  const [isScrolled, setIsScrolled] = useState(false);
   const inputRef = useRef(null);
+  const scrollRef = useRef(null);
 
   useEffect(() => {
     loadRoutes();
@@ -154,8 +156,8 @@ export default function Search() {
       {/* Main */}
       <main className="search-main">
         <div className="search-headline animate-fade-in-up">
-          <h2 className="search-title">Search your knowledge base</h2>
-          <p className="search-subtitle">Find documents, insights, and answers instantly.</p>
+          <h2 className="search-title">Search your files.</h2>
+          <p className="search-subtitle">Find your files instantly.</p>
         </div>
 
         <div className="search-bar-wrap">
@@ -168,8 +170,12 @@ export default function Search() {
           />
         </div>
 
-        <section className="search-results" aria-label="Search results">
-          <div className="search-results-scroll sage-scroll">
+        <section className={`search-results ${isScrolled ? 'is-scrolled' : ''}`} aria-label="Search results">
+          <div 
+            ref={scrollRef}
+            className="search-results-scroll sage-scroll"
+            onScroll={(e) => setIsScrolled(e.target.scrollTop > 10)}
+          >
             {isSearching ? (
               <div className="search-loading-overlay" aria-live="polite" aria-busy="true">
                 <div className="search-loading-pill">
