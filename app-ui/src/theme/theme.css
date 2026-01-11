@@ -2922,9 +2922,26 @@ textarea {
 
 .search-result-snippet {
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.6;
   color: var(--color-text-secondary);
   margin-bottom: 10px;
+}
+
+/* Query-aware snippet highlighting */
+.search-result-snippet .snippet-highlight {
+  background: linear-gradient(135deg, rgba(0, 122, 255, 0.15), rgba(88, 86, 214, 0.15));
+  color: var(--color-text-primary);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-weight: var(--font-weight-medium);
+}
+
+/* Allow 3 lines for query-aware snippets */
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .search-result-meta {

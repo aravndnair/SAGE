@@ -450,6 +450,7 @@ async def search_files(request: SearchRequest):
                 "path": r.get("path"),
                 "snippet": snippet,
                 "chunk": snippet,  # Alias for compatibility
+                "matched_terms": r.get("matched_terms", []),  # Terms to highlight
                 "score": r.get("hybrid_score", r.get("similarity", 0)),  # Use hybrid_score as main score
                 "similarity": round(r.get("similarity", 0) * 100, 2),  # Convert to percentage
                 "hybrid_score": round(r.get("hybrid_score", 0) * 100, 2)  # Convert to percentage

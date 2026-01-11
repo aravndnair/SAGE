@@ -1,9 +1,10 @@
 import time
-from sentence_transformers import SentenceTransformer
+import re
+from sentence_transformers import SentenceTransformer, util
 import weaviate
 import sqlite3
 import os
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 # ---------------- CONFIG ----------------
 
@@ -16,6 +17,11 @@ ENABLE_HYBRID = True      # Set to False to use pure semantic search
 SEMANTIC_WEIGHT = 0.8     # Semantic similarity dominates
 KEYWORD_WEIGHT = 0.2      # Keywords provide relevance boost
 FETCH_BUFFER = 10         # Fetch top_k * FETCH_BUFFER for deduplication
+
+# Query-aware Snippet Configuration
+MAX_SNIPPET_SENTENCES = 3    # Max sentences to include in snippet
+MIN_SENTENCE_LENGTH = 20     # Ignore very short sentences
+SENTENCE_SCORE_THRESHOLD = 0.3  # Min relevance score to include sentence
 
 # --------------------------------------
 
@@ -98,6 +104,129 @@ def calculate_keyword_score(query_terms: List[str], chunk_text: str, filename: s
     return score
 
 
+def split_into_sentences(text: str) -> List[str]:
+    """
+    Split text into sentences using regex.
+    Handles common sentence boundaries while preserving structure.
+    """
+    # Split on sentence-ending punctuation followed by space or end
+    # But avoid splitting on abbreviations like "Dr.", "Mr.", "e.g.", etc.
+    sentence_pattern = r'(?<=[.!?])\s+(?=[A-Z])|(?<=[.!?])$'
+    
+    # First, normalize whitespace
+    text = ' '.join(text.split())
+    
+    # Split into sentences
+    sentences = re.split(sentence_pattern, text)
+    
+    # Clean up and filter
+    cleaned = []
+    for s in sentences:
+        s = s.strip()
+        if len(s) >= MIN_SENTENCE_LENGTH:
+            cleaned.append(s)
+    
+    return cleaned
+
+
+def extract_query_aware_snippet(
+    query: str,
+    chunk_text: str,
+    query_embedding=None
+) -> Tuple[str, List[str]]:
+    """
+    Extract the most relevant sentences from a chunk based on the query.
+    Returns (snippet_text, list_of_matched_terms).
+    
+    Uses semantic similarity to find sentences that best answer the query,
+    not just sentences that contain query keywords.
+    """
+    model = get_model()
+    
+    # Get query embedding if not provided
+    if query_embedding is None:
+        query_embedding = model.encode(query, convert_to_tensor=True)
+    
+    # Split chunk into sentences
+    sentences = split_into_sentences(chunk_text)
+    
+    if not sentences:
+        # Fallback: return truncated chunk
+        return chunk_text[:300], []
+    
+    if len(sentences) <= MAX_SNIPPET_SENTENCES:
+        # Chunk is small enough, use all sentences
+        snippet = ' '.join(sentences)
+        matched_terms = find_matched_terms(query, snippet)
+        return snippet, matched_terms
+    
+    # Encode all sentences
+    sentence_embeddings = model.encode(sentences, convert_to_tensor=True)
+    
+    # Calculate semantic similarity between query and each sentence
+    similarities = util.cos_sim(query_embedding, sentence_embeddings)[0]
+    
+    # Get sentence scores as list of (index, score)
+    scored_sentences = [(i, float(similarities[i])) for i in range(len(sentences))]
+    
+    # Sort by score descending
+    scored_sentences.sort(key=lambda x: x[1], reverse=True)
+    
+    # Select top sentences that meet threshold
+    selected_indices = []
+    for idx, score in scored_sentences:
+        if score >= SENTENCE_SCORE_THRESHOLD and len(selected_indices) < MAX_SNIPPET_SENTENCES:
+            selected_indices.append(idx)
+    
+    # If no sentences meet threshold, take top ones anyway
+    if not selected_indices:
+        selected_indices = [scored_sentences[0][0]] if scored_sentences else []
+    
+    # Sort by original position to maintain reading order
+    selected_indices.sort()
+    
+    # Build snippet from selected sentences
+    selected_sentences = [sentences[i] for i in selected_indices]
+    
+    # Add ellipsis between non-consecutive sentences
+    snippet_parts = []
+    for i, idx in enumerate(selected_indices):
+        if i > 0 and idx > selected_indices[i-1] + 1:
+            # Non-consecutive - add ellipsis
+            snippet_parts.append("...")
+        snippet_parts.append(sentences[idx])
+    
+    snippet = ' '.join(snippet_parts)
+    
+    # Find terms to highlight
+    matched_terms = find_matched_terms(query, snippet)
+    
+    return snippet, matched_terms
+
+
+def find_matched_terms(query: str, text: str) -> List[str]:
+    """
+    Find query terms that appear in the text for highlighting.
+    Returns list of matched terms (case-preserved from text).
+    """
+    query_terms = set(query.lower().split())
+    text_lower = text.lower()
+    
+    matched = []
+    for term in query_terms:
+        # Skip very short terms (articles, prepositions)
+        if len(term) < 3:
+            continue
+        if term in text_lower:
+            # Find the actual case-preserved version in text
+            pattern = re.compile(re.escape(term), re.IGNORECASE)
+            match = pattern.search(text)
+            if match:
+                matched.append(match.group())
+    
+    return list(set(matched))
+
+
 def semantic_search(
     query: str,
     top_k: int = 5,
@@ -161,12 +290,39 @@ def semantic_search(
             file_best[path] = {
                 "file": filename,
                 "path": path,
-                "snippet": chunk_text[:300],
+                "chunk": chunk_text,  # Store full chunk for query-aware processing
                 "distance": round(distance, 4),
                 "similarity": round(semantic_similarity, 4),
                 "hybrid_score": round(hybrid_score, 4)
             }
 
-    # ---- Sort by hybrid score and return top_k files ----
-    output = sorted(file_best.values(), key=lambda x: x["hybrid_score"], reverse=True)
-    return output[:top_k]
+    # ---- Extract query-aware snippets for top results ----
+    # Pre-compute query embedding once for efficiency
+    query_embedding = model.encode(query, convert_to_tensor=True)
+    
+    # Sort by hybrid score
+    sorted_results = sorted(file_best.values(), key=lambda x: x["hybrid_score"], reverse=True)[:top_k]
+    
+    # Process each result to extract query-aware snippet
+    output = []
+    for result in sorted_results:
+        chunk_text = result.get("chunk", "")
+        
+        # Extract relevant sentences and matched terms
+        snippet, matched_terms = extract_query_aware_snippet(
+            query, 
+            chunk_text,
+            query_embedding
+        )
+        
+        output.append({
+            "file": result["file"],
+            "path": result["path"],
+            "snippet": snippet,
+            "matched_terms": matched_terms,
+            "distance": result["distance"],
+            "similarity": result["similarity"],
+            "hybrid_score": result["hybrid_score"]
+        })
+    
+    return output

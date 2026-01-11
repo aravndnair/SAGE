@@ -195,6 +195,7 @@ export default function Search() {
                     snippet={result?.snippet}
                     score={typeof result?.score === 'number' ? result.score : undefined}
                     path={result?.path}
+                    matchedTerms={result?.matched_terms}
                     onOpen={handleOpenFile}
                   />
                 ))}
