@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getRoots, searchFiles } from '../api/backend';
+import { getRoots, searchFiles, deepdiveCreate } from '../api/backend';
 import ResultCard from '../components/ResultCard';
 import SearchBar from '../components/SearchBar';
 import { SCREENS, useApp } from '../state/appState';
@@ -9,7 +9,7 @@ import peopleIcon from '../../logo/people.png';
 import settingsIcon from '../../logo/setting.png';
 
 export default function Search() {
-  const { setScreen, searchQuery, setSearchQuery, searchResults, setSearchResults, setIndexingLogs, isSearching, setIsSearching, routes, userName, saveRoutes } = useApp();
+  const { setScreen, searchQuery, setSearchQuery, searchResults, setSearchResults, setIndexingLogs, isSearching, setIsSearching, routes, userName, saveRoutes, setDeepDiveSessionId } = useApp();
   const [localQuery, setLocalQuery] = useState('');
   const [routesLoading, setRoutesLoading] = useState(true);
   const inputRef = useRef(null);
@@ -68,6 +68,19 @@ export default function Search() {
   const handleOpenFile = async (filePath) => {
     if (window.electron && window.electron.openFile) {
       await window.electron.openFile(filePath);
+    }
+  };
+
+  const handleDeepDive = async (filePath) => {
+    try {
+      const data = await deepdiveCreate(filePath);
+      if (data.success && data.session_id) {
+        setDeepDiveSessionId(data.session_id);
+        setScreen(SCREENS.DEEPDIVE);
+      }
+    } catch (err) {
+      console.error('Failed to create DeepDive session:', err);
+      alert('Failed to start DeepDive. Please try again.');
     }
   };
 
@@ -190,6 +203,7 @@ export default function Search() {
                     score={typeof result?.score === 'number' ? result.score : undefined}
                     path={result?.path}
                     onOpen={handleOpenFile}
+                    onDeepDive={handleDeepDive}
                   />
                 ))}
               </div>

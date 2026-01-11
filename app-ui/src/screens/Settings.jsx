@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { addRoot as apiAddRoute, removeRoot as apiRemoveRoute, getRoots, triggerIndexing } from '../api/backend';
+import { addRoot as apiAddRoute, removeRoot as apiRemoveRoute, getRoots, triggerIndexing, deepdiveGetSessions, deepdiveDelete } from '../api/backend';
 import { SCREENS, useApp } from '../state/appState';
 import '../theme/theme.css';
 
@@ -8,10 +8,15 @@ import sageLogo from '../../logo/SageNoBG.png';
 const BASE_URL = "http://127.0.0.1:8000";
 
 export default function Settings() {
-  const { setScreen, saveRoutes, setPendingRoutes, userName } = useApp();
+  const { setScreen, saveRoutes, setPendingRoutes, userName, setDeepDiveSessionId } = useApp();
   const [localRoutes, setLocalRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAcknowledgement, setShowAcknowledgement] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null); // { index, path }
+  
+  // DeepDive sessions
+  const [deepdiveSessions, setDeepDiveSessions] = useState([]);
+  const [deepdiveLoading, setDeepDiveLoading] = useState(true);
 
   const initials = useMemo(() => {
     const name = (userName || 'User').trim();
@@ -24,7 +29,37 @@ export default function Settings() {
 
   useEffect(() => {
     loadRoutes();
+    loadDeepDiveSessions();
   }, []);
+  
+  const loadDeepDiveSessions = async () => {
+    setDeepDiveLoading(true);
+    try {
+      const data = await deepdiveGetSessions();
+      setDeepDiveSessions(data.sessions || []);
+    } catch (err) {
+      console.error('Failed to load DeepDive sessions:', err);
+    }
+    setDeepDiveLoading(false);
+  };
+  
+  const handleOpenDeepDive = (sessionId) => {
+    setDeepDiveSessionId(sessionId);
+    setScreen(SCREENS.DEEPDIVE);
+  };
+  
+  const handleDeleteDeepDive = async (sessionId) => {
+    if (!confirm('Are you sure you want to delete this DeepDive session? This cannot be undone.')) {
+      return;
+    }
+    try {
+      await deepdiveDelete(sessionId);
+      setDeepDiveSessions(prev => prev.filter(s => s.id !== sessionId));
+    } catch (err) {
+      console.error('Failed to delete DeepDive session:', err);
+      alert('Failed to delete session. Please try again.');
+    }
+  };
 
   const loadRoutes = async () => {
     try {
@@ -212,6 +247,88 @@ export default function Settings() {
                     </ul>
                   ) : (
                     <div className="settings-empty">No directory routes added yet.</div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* DeepDive Sessions Section */}
+            <div className="settings-routes-card deepdive-sessions-card">
+              <div className="settings-routes-header">
+                <h3 className="settings-routes-title">DeepDive Sessions ({deepdiveSessions.length})</h3>
+                <button
+                  type="button"
+                  className="settings-add-route"
+                  onClick={loadDeepDiveSessions}
+                  disabled={deepdiveLoading}
+                >
+                  <span className="settings-add-route-icon" aria-hidden="true">
+                    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M17.5 10a7.5 7.5 0 1 1-1.5-4.5" />
+                      <path d="M17.5 3v4h-4" />
+                    </svg>
+                  </span>
+                  Refresh
+                </button>
+              </div>
+
+              {deepdiveLoading ? (
+                <div className="settings-loading">
+                  <div className="loader" />
+                </div>
+              ) : (
+                <>
+                  {deepdiveSessions.length > 0 ? (
+                    <ul className="settings-route-list deepdive-session-list">
+                      {deepdiveSessions.map((session) => (
+                        <li key={session.id} className="settings-route-item deepdive-session-item">
+                          <div className="settings-route-left">
+                            <div className="settings-route-icon is-purple" aria-hidden="true">
+                              <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <circle cx="10" cy="10" r="7" />
+                                <path d="M10 6v4l2.5 2.5" />
+                              </svg>
+                            </div>
+                            <div className="settings-route-text">
+                              <div className="settings-route-path deepdive-session-title" title={session.title}>
+                                {session.title}
+                              </div>
+                              <div className="settings-route-sub">
+                                {session.file_count} files • {session.message_count} messages
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="deepdive-session-actions">
+                            <button
+                              type="button"
+                              className="deepdive-session-open"
+                              onClick={() => handleOpenDeepDive(session.id)}
+                              title="Open Session"
+                            >
+                              Open
+                            </button>
+                            <button
+                              type="button"
+                              className="settings-route-remove"
+                              onClick={() => handleDeleteDeepDive(session.id)}
+                              title="Delete Session"
+                              aria-label="Delete Session"
+                            >
+                              <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M7.5 4.5h5" />
+                                <path d="M6 6h8" />
+                                <path d="M7 6l.6 9h4.8l.6-9" />
+                                <path d="M8.5 8.5v5" />
+                                <path d="M11.5 8.5v5" />
+                              </svg>
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="settings-empty">No DeepDive sessions yet. Start one from search results.</div>
                   )}
                 </>
               )}

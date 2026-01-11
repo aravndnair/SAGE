@@ -413,6 +413,442 @@ async def search_files(request: SearchRequest):
 
 
 # =========================
+# DEEPDIVE API
+# =========================
+import uuid
+import time
+import httpx
+
+# DeepDive Request Models
+class DeepDiveCreateRequest(BaseModel):
+    file_path: str  # Initial file to add
+
+class DeepDiveAddFileRequest(BaseModel):
+    session_id: str
+    file_path: str
+
+class DeepDiveRemoveFileRequest(BaseModel):
+    session_id: str
+    file_path: str
+
+class DeepDiveMessageRequest(BaseModel):
+    session_id: str
+    message: str
+
+class DeepDiveDeleteRequest(BaseModel):
+    session_id: str
+
+# Ollama Configuration
+OLLAMA_BASE_URL = "http://127.0.0.1:11434"
+OLLAMA_MODEL = "mistral"  # Can be changed to llama3.1, phi3, qwen2, etc.
+OLLAMA_TIMEOUT = 120.0  # Seconds
+
+DEEPDIVE_SYSTEM_PROMPT = """You are a helpful document analysis assistant. When document excerpts are provided, answer questions based on that content.
+
+RULES:
+1. When [DOCUMENT] sections are provided, base your answers on that content
+2. If asked about something not in the provided documents, say so clearly
+3. For conversational messages (thanks, ok, etc.) without document context, respond naturally and briefly
+4. Be concise and helpful
+
+You are helping the user understand their local files."""
+
+
+@app.post("/deepdive/create")
+async def deepdive_create(request: DeepDiveCreateRequest):
+    """Create a new DeepDive session with an initial file"""
+    try:
+        session_id = str(uuid.uuid4())
+        now = time.time()
+        file_path = normalize_path(request.file_path)
+        
+        # Extract filename for initial title
+        filename = os.path.basename(file_path)
+        title = f"DeepDive: {filename}"
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Create session
+        cur.execute(
+            "INSERT INTO deepdive_sessions (id, title, created_at, last_used) VALUES (?, ?, ?, ?)",
+            (session_id, title, now, now)
+        )
+        
+        # Add initial file
+        cur.execute(
+            "INSERT INTO deepdive_files (session_id, path, added_at) VALUES (?, ?, ?)",
+            (session_id, file_path, now)
+        )
+        
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "session_id": session_id,
+            "title": title
+        }
+    except Exception as e:
+        print(f"❌ DeepDive create error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/deepdive/sessions")
+async def deepdive_list_sessions():
+    """List all DeepDive sessions"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT s.id, s.title, s.created_at, s.last_used,
+                   COUNT(f.path) as file_count,
+                   COUNT(m.id) as message_count
+            FROM deepdive_sessions s
+            LEFT JOIN deepdive_files f ON s.id = f.session_id
+            LEFT JOIN deepdive_messages m ON s.id = m.session_id
+            GROUP BY s.id
+            ORDER BY s.last_used DESC
+        """)
+        
+        sessions = []
+        for row in cur.fetchall():
+            sessions.append({
+                "id": row[0],
+                "title": row[1],
+                "created_at": row[2],
+                "last_used": row[3],
+                "file_count": row[4],
+                "message_count": row[5]
+            })
+        
+        conn.close()
+        return {"sessions": sessions}
+    except Exception as e:
+        print(f"❌ DeepDive list error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/deepdive/session/{session_id}")
+async def deepdive_get_session(session_id: str):
+    """Get a specific DeepDive session with files and messages"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session info
+        cur.execute("SELECT id, title, created_at, last_used FROM deepdive_sessions WHERE id = ?", (session_id,))
+        session_row = cur.fetchone()
+        if not session_row:
+            conn.close()
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Get files
+        cur.execute("SELECT path, added_at FROM deepdive_files WHERE session_id = ? ORDER BY added_at", (session_id,))
+        files = [{"path": row[0], "filename": os.path.basename(row[0]), "added_at": row[1]} for row in cur.fetchall()]
+        
+        # Get messages
+        cur.execute("SELECT id, role, content, timestamp FROM deepdive_messages WHERE session_id = ? ORDER BY timestamp", (session_id,))
+        messages = [{"id": row[0], "role": row[1], "content": row[2], "timestamp": row[3]} for row in cur.fetchall()]
+        
+        # Update last_used
+        cur.execute("UPDATE deepdive_sessions SET last_used = ? WHERE id = ?", (time.time(), session_id))
+        conn.commit()
+        conn.close()
+        
+        return {
+            "session": {
+                "id": session_row[0],
+                "title": session_row[1],
+                "created_at": session_row[2],
+                "last_used": session_row[3]
+            },
+            "files": files,
+            "messages": messages
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ DeepDive get session error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/deepdive/add-file")
+async def deepdive_add_file(request: DeepDiveAddFileRequest):
+    """Add a file to an existing DeepDive session"""
+    try:
+        file_path = normalize_path(request.file_path)
+        now = time.time()
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Check session exists
+        cur.execute("SELECT id FROM deepdive_sessions WHERE id = ?", (request.session_id,))
+        if not cur.fetchone():
+            conn.close()
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        # Check if file already in session
+        cur.execute("SELECT path FROM deepdive_files WHERE session_id = ? AND path = ?", (request.session_id, file_path))
+        if cur.fetchone():
+            conn.close()
+            return {"success": True, "message": "File already in session"}
+        
+        # Add file
+        cur.execute(
+            "INSERT INTO deepdive_files (session_id, path, added_at) VALUES (?, ?, ?)",
+            (request.session_id, file_path, now)
+        )
+        
+        # Update last_used
+        cur.execute("UPDATE deepdive_sessions SET last_used = ? WHERE id = ?", (now, request.session_id))
+        
+        conn.commit()
+        conn.close()
+        
+        return {"success": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ DeepDive add file error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/deepdive/remove-file")
+async def deepdive_remove_file(request: DeepDiveRemoveFileRequest):
+    """Remove a file from a DeepDive session"""
+    try:
+        file_path = normalize_path(request.file_path)
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        cur.execute("DELETE FROM deepdive_files WHERE session_id = ? AND path = ?", (request.session_id, file_path))
+        
+        conn.commit()
+        conn.close()
+        
+        return {"success": True}
+    except Exception as e:
+        print(f"❌ DeepDive remove file error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/deepdive/delete")
+async def deepdive_delete_session(request: DeepDiveDeleteRequest):
+    """Delete a DeepDive session and all associated data"""
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Delete in order: messages, files, session
+        cur.execute("DELETE FROM deepdive_messages WHERE session_id = ?", (request.session_id,))
+        cur.execute("DELETE FROM deepdive_files WHERE session_id = ?", (request.session_id,))
+        cur.execute("DELETE FROM deepdive_sessions WHERE id = ?", (request.session_id,))
+        
+        conn.commit()
+        conn.close()
+        
+        return {"success": True}
+    except Exception as e:
+        print(f"❌ DeepDive delete error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/deepdive/chat")
+async def deepdive_chat(request: DeepDiveMessageRequest):
+    """Send a message in a DeepDive session and get LLM response"""
+    try:
+        now = time.time()
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
+        # Get session files
+        cur.execute("SELECT path FROM deepdive_files WHERE session_id = ?", (request.session_id,))
+        file_paths = [row[0] for row in cur.fetchall()]
+        
+        if not file_paths:
+            conn.close()
+            raise HTTPException(status_code=400, detail="No files in session")
+        
+        # Get message history for context
+        cur.execute(
+            "SELECT role, content FROM deepdive_messages WHERE session_id = ? ORDER BY timestamp DESC LIMIT 10",
+            (request.session_id,)
+        )
+        history = list(reversed(cur.fetchall()))
+        
+        # Save user message
+        cur.execute(
+            "INSERT INTO deepdive_messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
+            (request.session_id, "user", request.message, now)
+        )
+        
+        # Update last_used
+        cur.execute("UPDATE deepdive_sessions SET last_used = ? WHERE id = ?", (now, request.session_id))
+        
+        # Auto-generate title after first user message
+        cur.execute("SELECT COUNT(*) FROM deepdive_messages WHERE session_id = ? AND role = 'user'", (request.session_id,))
+        user_msg_count = cur.fetchone()[0]
+        
+        if user_msg_count == 1:
+            # First message - generate title from question + files
+            file_names = [os.path.basename(p) for p in file_paths[:2]]
+            short_question = request.message[:50] + "..." if len(request.message) > 50 else request.message
+            new_title = f"{short_question}"
+            cur.execute("UPDATE deepdive_sessions SET title = ? WHERE id = ?", (new_title, request.session_id))
+        
+        conn.commit()
+        
+        # Check if message is conversational (not a question/request about documents)
+        conversational_phrases = {
+            "thanks", "thank you", "ok", "okay", "got it", "understood", "i see",
+            "nice", "great", "cool", "awesome", "perfect", "sure", "yes", "no",
+            "hello", "hi", "hey", "bye", "goodbye", "good", "fine", "alright",
+            "thx", "ty", "k", "yep", "nope", "yeah", "yea", "nah"
+        }
+        msg_lower = request.message.lower().strip().rstrip('.!?,')
+        words = request.message.split()
+        is_conversational = msg_lower in conversational_phrases or len(words) <= 2
+        
+        print(f"[DeepDive] Message: '{request.message}' | Normalized: '{msg_lower}' | Words: {len(words)} | Conversational: {is_conversational}")
+        
+        search_results = []
+        context_parts = []
+        
+        # Only search/inject context for substantive questions
+        if not is_conversational:
+            # Perform file-scoped semantic search
+            search_results = semantic_search(
+                query=request.message,
+                top_k=5,
+                filter_paths=file_paths
+            )
+            
+            # Build context document
+            for result in search_results:
+                chunk = result.get("chunk", result.get("snippet", ""))
+                if chunk:
+                    context_parts.append(f"[DOCUMENT: {result['file']}]\n{chunk}\n[/DOCUMENT]")
+            
+            # If no search results, fetch beginning of each file directly
+            if not context_parts:
+                for file_path in file_paths[:3]:  # Limit to first 3 files
+                    try:
+                        if os.path.exists(file_path):
+                            # Use index_docs.extract_text to handle PDF, DOCX, etc.
+                            content = index_docs.extract_text(file_path)
+                            if content:
+                                # Limit to first 4000 chars
+                                content = content[:4000]
+                                if content.strip():
+                                    context_parts.append(f"[DOCUMENT: {os.path.basename(file_path)}]\n{content}\n[/DOCUMENT]")
+                    except Exception as e:
+                        print(f"Could not read file {file_path}: {e}")
+        
+        context = "\n\n".join(context_parts) if context_parts else None
+        
+        # Build conversation for Ollama
+        messages = [{"role": "system", "content": DEEPDIVE_SYSTEM_PROMPT}]
+        
+        # Add history
+        for role, content in history:
+            messages.append({"role": role, "content": content})
+        
+        # Add current query - with or without document context
+        if context:
+            user_prompt = f"""Based on these document excerpts:
+
+{context}
+
+User question: {request.message}"""
+        else:
+            # Conversational message - no document context needed
+            user_prompt = request.message
+        
+        messages.append({"role": "user", "content": user_prompt})
+        
+        # Call Ollama
+        try:
+            async with httpx.AsyncClient(timeout=OLLAMA_TIMEOUT) as client:
+                response = await client.post(
+                    f"{OLLAMA_BASE_URL}/api/chat",
+                    json={
+                        "model": OLLAMA_MODEL,
+                        "messages": messages,
+                        "stream": False
+                    }
+                )
+                
+                if response.status_code != 200:
+                    raise Exception(f"Ollama returned {response.status_code}")
+                
+                data = response.json()
+                assistant_content = data.get("message", {}).get("content", "I couldn't generate a response.")
+        except httpx.ConnectError:
+            assistant_content = "⚠️ Cannot connect to Ollama. Please ensure Ollama is running locally with a model loaded.\n\nRun: `ollama run mistral`"
+        except Exception as e:
+            print(f"❌ Ollama error: {e}")
+            assistant_content = f"⚠️ Error generating response: {str(e)}"
+        
+        # Save assistant response
+        cur.execute(
+            "INSERT INTO deepdive_messages (session_id, role, content, timestamp) VALUES (?, ?, ?, ?)",
+            (request.session_id, "assistant", assistant_content, time.time())
+        )
+        conn.commit()
+        conn.close()
+        
+        return {
+            "success": True,
+            "response": assistant_content,
+            "sources": [{"file": r["file"], "path": r["path"], "snippet": r["snippet"]} for r in search_results]
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ DeepDive chat error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/deepdive/search-files")
+async def deepdive_search_files(request: SearchRequest):
+    """Search indexed files to add to a DeepDive session"""
+    try:
+        query = request.query.strip()
+        if not query:
+            return {"results": []}
+        
+        results = semantic_search(query, top_k=request.top_k or 10)
+        
+        # Return simplified results for file picker
+        return {
+            "results": [
+                {
+                    "file": r.get("file"),
+                    "path": r.get("path"),
+                    "snippet": r.get("snippet", "")[:150]
+                }
+                for r in results
+            ]
+        }
+    except Exception as e:
+        print(f"❌ DeepDive search error: {e}")
+        traceback.print_exc()
+        return {"results": [], "error": str(e)}
+
+
+# =========================
 # HELPER FUNCTIONS
 # =========================
 def is_sensitive_text(text: str | None) -> bool:

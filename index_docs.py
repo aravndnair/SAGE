@@ -187,6 +187,37 @@ def init_db():
         )
     """)
 
+    # DeepDive tables
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS deepdive_sessions (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            created_at REAL NOT NULL,
+            last_used REAL NOT NULL
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS deepdive_files (
+            session_id TEXT NOT NULL,
+            path TEXT NOT NULL,
+            added_at REAL NOT NULL,
+            PRIMARY KEY (session_id, path),
+            FOREIGN KEY (session_id) REFERENCES deepdive_sessions(id) ON DELETE CASCADE
+        )
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS deepdive_messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            timestamp REAL NOT NULL,
+            FOREIGN KEY (session_id) REFERENCES deepdive_sessions(id) ON DELETE CASCADE
+        )
+    """)
+
     conn.commit()
     return conn
 

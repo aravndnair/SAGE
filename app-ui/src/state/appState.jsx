@@ -13,6 +13,7 @@ export const SCREENS = Object.freeze({
   PROFILE: "PROFILE",
   SETTINGS: "SETTINGS",
   ACKNOWLEDGEMENT: "ACKNOWLEDGEMENT",
+  DEEPDIVE: "DEEPDIVE",
 });
 
 const AppContext = createContext(null);
@@ -69,6 +70,9 @@ export function AppProvider({ children }) {
   const [indexingLogsResults, _setIndexingLogsResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [pendingRoutes, setPendingRoutes] = useState([]); // Routes before acknowledgement
+  
+  // DeepDive state
+  const [deepdiveSessionId, setDeepDiveSessionId] = useState(null);
 
   // Load user data from localStorage
   useEffect(() => {
@@ -271,6 +275,9 @@ export function AppProvider({ children }) {
         pendingRoutes,
         setPendingRoutes,
         markOnboardingComplete,
+        // DeepDive
+        deepdiveSessionId,
+        setDeepDiveSessionId,
       }}
     >
       {children}

@@ -68,18 +68,26 @@ def calculate_keyword_score(query_terms: List[str], chunk_text: str, filename: s
 def semantic_search(
     query: str,
     top_k: int = 5,
-    roots: Optional[List[str]] = None
+    roots: Optional[List[str]] = None,
+    filter_paths: Optional[List[str]] = None
 ):
     """
     Semantic search with file-level deduplication and optional hybrid scoring.
     Returns top_k FILES (not chunks), each with their best matching chunk.
+    
+    Args:
+        query: Search query string
+        top_k: Number of results to return
+        roots: List of root directories to scope search (uses DB roots if None)
+        filter_paths: List of specific file paths to restrict search to (for DeepDive)
     """
 
     # ---- Resolve effective roots ----
-    if roots is None:
+    if roots is None and filter_paths is None:
         roots = load_db_roots()
 
     norm_roots = [os.path.normpath(r) for r in roots] if roots else None
+    norm_filter_paths = set(os.path.normpath(p) for p in filter_paths) if filter_paths else None
 
     # ---- Parse query for keyword matching ----
     query_terms = query.lower().split() if ENABLE_HYBRID else []
@@ -101,8 +109,12 @@ def semantic_search(
         path = obj.properties.get("path", "")
         norm_path = os.path.normpath(path)
 
-        # ---- Root scoping ----
-        if norm_roots:
+        # ---- DeepDive file filtering (strict path match) ----
+        if norm_filter_paths is not None:
+            if norm_path not in norm_filter_paths:
+                continue
+        # ---- Root scoping (only if not using filter_paths) ----
+        elif norm_roots:
             if not any(norm_path.startswith(r) for r in norm_roots):
                 continue
 
@@ -130,6 +142,34 @@ def semantic_search(
                 "hybrid_score": round(hybrid_score, 4)
             }
 
-    # ---- Sort by hybrid score and return top_k files ----
-    output = sorted(file_best.values(), key=lambda x: x["hybrid_score"], reverse=True)
-    return output[:top_k]
+    # ---- Extract query-aware snippets for top results ----
+    # Pre-compute query embedding once for efficiency
+    query_embedding = model.encode(query, convert_to_tensor=True)
+    
+    # Sort by hybrid score
+    sorted_results = sorted(file_best.values(), key=lambda x: x["hybrid_score"], reverse=True)[:top_k]
+    
+    # Process each result to extract query-aware snippet
+    output = []
+    for result in sorted_results:
+        chunk_text = result.get("chunk", "")
+        
+        # Extract relevant sentences and matched terms
+        snippet, matched_terms = extract_query_aware_snippet(
+            query, 
+            chunk_text,
+            query_embedding
+        )
+        
+        output.append({
+            "file": result["file"],
+            "path": result["path"],
+            "snippet": snippet,
+            "chunk": result["chunk"],  # Include full chunk for DeepDive context
+            "matched_terms": matched_terms,
+            "distance": result["distance"],
+            "similarity": result["similarity"],
+            "hybrid_score": result["hybrid_score"]
+        })
+    
+    return output

@@ -6,6 +6,7 @@ import Search from "./screens/Search.jsx";
 import Settings from "./screens/Settings.jsx";
 import SetupComplete from "./screens/SetupComplete.jsx";
 import Welcome from "./screens/Welcome.jsx";
+import DeepDive from "./screens/DeepDive.jsx";
 import { SCREENS, useApp } from "./state/appState.jsx";
 import "./theme/theme.css";
 
@@ -61,6 +62,8 @@ export default function App() {
           return <Settings />;
         case SCREENS.PROFILE:
           return <Profile />;
+        case SCREENS.DEEPDIVE:
+          return <DeepDive />;
         default:
           return <Search />;
       }
