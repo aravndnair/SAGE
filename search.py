@@ -65,6 +65,47 @@ def calculate_keyword_score(query_terms: List[str], chunk_text: str, filename: s
     return score
 
 
+def extract_query_aware_snippet(query: str, chunk_text: str, query_terms: List[str], max_length: int = 300) -> tuple:
+    """
+    Extract a query-aware snippet from chunk text.
+    Returns the most relevant portion and matched terms.
+    """
+    if not chunk_text:
+        return "", []
+    
+    # Find matched terms
+    matched_terms = []
+    chunk_lower = chunk_text.lower()
+    for term in query_terms:
+        if term.lower() in chunk_lower:
+            matched_terms.append(term)
+    
+    # If we have matched terms, try to center snippet around first match
+    if matched_terms:
+        first_match = matched_terms[0].lower()
+        match_pos = chunk_lower.find(first_match)
+        if match_pos != -1:
+            # Center the snippet around the match
+            start = max(0, match_pos - max_length // 2)
+            end = min(len(chunk_text), start + max_length)
+            snippet = chunk_text[start:end].strip()
+            
+            # Add ellipsis if truncated
+            if start > 0:
+                snippet = "..." + snippet
+            if end < len(chunk_text):
+                snippet = snippet + "..."
+            
+            return snippet, matched_terms
+    
+    # Fallback: return beginning of chunk
+    snippet = chunk_text[:max_length].strip()
+    if len(chunk_text) > max_length:
+        snippet += "..."
+    
+    return snippet, matched_terms
+
+
 def semantic_search(
     query: str,
     top_k: int = 5,
@@ -136,16 +177,12 @@ def semantic_search(
             file_best[path] = {
                 "file": filename,
                 "path": path,
-                "snippet": chunk_text[:300],
+                "chunk": chunk_text,  # Store full chunk for snippet extraction
                 "distance": round(distance, 4),
                 "similarity": round(semantic_similarity, 4),
                 "hybrid_score": round(hybrid_score, 4)
             }
 
-    # ---- Extract query-aware snippets for top results ----
-    # Pre-compute query embedding once for efficiency
-    query_embedding = model.encode(query, convert_to_tensor=True)
-    
     # Sort by hybrid score
     sorted_results = sorted(file_best.values(), key=lambda x: x["hybrid_score"], reverse=True)[:top_k]
     
@@ -158,14 +195,14 @@ def semantic_search(
         snippet, matched_terms = extract_query_aware_snippet(
             query, 
             chunk_text,
-            query_embedding
+            query_terms
         )
         
         output.append({
             "file": result["file"],
             "path": result["path"],
             "snippet": snippet,
-            "chunk": result["chunk"],  # Include full chunk for DeepDive context
+            "chunk": chunk_text,  # Include full chunk for DeepDive context
             "matched_terms": matched_terms,
             "distance": result["distance"],
             "similarity": result["similarity"],

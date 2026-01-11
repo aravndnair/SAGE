@@ -2194,13 +2194,14 @@ textarea {
   top: -18%;
   left: -18%;
   background: var(--color-primary);
-  animation: pulseGlow 2.4s ease-in-out infinite;
+  animation: pulseGlow 2.4s ease-in-out infinite, ambientFloat 20s ease-in-out infinite;
 }
 
 .search-ambient-blob--secondary {
   bottom: -18%;
   right: -18%;
   background: var(--gradient-purple);
+  animation: ambientFloat 25s ease-in-out infinite reverse;
 }
 
 @keyframes pulseGlow {
@@ -2210,6 +2211,21 @@ textarea {
   }
   50% {
     opacity: 0.45;
+  }
+}
+
+@keyframes ambientFloat {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  25% {
+    transform: translate3d(5%, 8%, 0);
+  }
+  50% {
+    transform: translate3d(10%, 3%, 0);
+  }
+  75% {
+    transform: translate3d(3%, 10%, 0);
   }
 }
 
