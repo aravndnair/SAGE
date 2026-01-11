@@ -39,7 +39,8 @@ SAGE finds relevant files even if they don't contain your exact search terms.
 | 🔒 **100% Local** | All data stays on your machine. No cloud. No telemetry. |
 | 🧠 **Semantic Search** | Finds documents by meaning, not just keywords |
 | ⚡ **Hybrid Search** | Combines semantic similarity with keyword matching |
-| 📁 **Multi-Format** | Supports TXT, PDF (text & scanned), DOCX |
+| � **DeepDive** | Multi-file LLM reasoning workspace with Ollama |
+| 📁 **Multi-Format** | Supports TXT, PDF (text & scanned), DOCX, PPTX |
 | 🔄 **Real-Time Sync** | Watches folders and auto-indexes new/changed files |
 | 🚀 **Fast Restarts** | Warm start indexing skips unchanged files |
 | 🎨 **Modern UI** | Beautiful glassmorphic Electron interface |
@@ -73,6 +74,7 @@ SAGE finds relevant files even if they don't contain your exact search terms.
 1. **Indexing**: Files → Chunking → Embedding → Weaviate
 2. **Search**: Query → Embedding → Vector Search → Hybrid Ranking → Results
 3. **Sync**: File changes → Watchdog → Incremental update
+4. **DeepDive**: Query → File-Scoped Search → Ollama LLM → Response
 
 ---
 
@@ -91,6 +93,8 @@ SAGE finds relevant files even if they don't contain your exact search terms.
 | PyMuPDF | PDF extraction |
 | python-docx | Word document extraction |
 | Tesseract OCR | Scanned PDF fallback |
+| Ollama | Local LLM for DeepDive (Mistral) |
+| httpx | Async HTTP client |
 
 ### Frontend
 | Technology | Purpose |
@@ -128,7 +132,7 @@ SAGE/
 │   │   ├── App.jsx
 │   │   ├── api/           # Backend API client
 │   │   ├── components/    # Reusable UI components
-│   │   ├── screens/       # App screens
+│   │   ├── screens/       # App screens (Search, Settings, DeepDive, etc.)
 │   │   ├── state/         # Global state management
 │   │   └── theme/         # CSS styles
 │   ├── logo/              # App icons/logos
@@ -148,6 +152,7 @@ SAGE/
 - Node.js 18+ and npm
 - Docker (for Weaviate) OR Weaviate binary
 - Tesseract OCR (optional, for scanned PDFs)
+- Ollama (optional, for DeepDive LLM feature)
 
 ### 1. Clone the Repository
 
@@ -242,6 +247,20 @@ npm run electron
 - View previous search results
 - Clear logs when needed
 
+### Using DeepDive (LLM Chat)
+
+DeepDive lets you have conversations with an AI about your documents:
+
+1. **Start a session**: Click the **DeepDive** button on any search result
+2. **Ask questions**: Chat naturally about the document content
+3. **Add more files**: Use the **+ Add File** button to expand context
+4. **Manage sessions**: View/delete sessions in **Settings**
+
+**Requirements:**
+- Install [Ollama](https://ollama.com/download)
+- Run: `ollama run mistral`
+- Ollama runs as a background service after first use
+
 ---
 
 ## ⚙️ Configuration
@@ -284,6 +303,13 @@ http://127.0.0.1:8000
 | `POST` | `/roots/add` | Add folder to index |
 | `POST` | `/roots/remove` | Remove folder |
 | `POST` | `/index` | Trigger indexing |
+| `POST` | `/deepdive/create` | Create DeepDive session |
+| `GET` | `/deepdive/sessions` | List all sessions |
+| `GET` | `/deepdive/session/{id}` | Get session details |
+| `POST` | `/deepdive/chat` | Send message to LLM |
+| `POST` | `/deepdive/add-file` | Add file to session |
+| `POST` | `/deepdive/remove-file` | Remove file from session |
+| `POST` | `/deepdive/delete` | Delete session |
 
 ### Search Request
 
@@ -324,6 +350,7 @@ POST /search
 | **Settings** | Folder management |
 | **Indexing Logs** | Search history |
 | **Profile** | User settings |
+| **DeepDive** | LLM chat with file context |
 
 ---
 
@@ -365,7 +392,9 @@ POST /search
 - [x] Electron desktop app
 - [x] Glassmorphic UI design
 - [x] Onboarding flow
-- [ ] PowerPoint (.pptx) support
+- [x] PowerPoint (.pptx) support
+- [x] Query-aware snippets with term highlighting
+- [x] DeepDive: Local LLM reasoning with Ollama
 - [ ] Excel (.xlsx) support
 - [ ] Search filters & advanced options
 - [ ] In-app file preview
@@ -414,5 +443,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 </p>
 
 <p align="center">
-  <sub>© 2025 Aravind Nair. All rights reserved.</sub>
+  <sub>© 2026 Aravind Nair. All rights reserved.</sub>
 </p>
