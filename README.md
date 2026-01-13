@@ -30,6 +30,9 @@
 - [Screenshots](#-screenshots)
 - [Features](#-features)
 - [Architecture](#-architecture)
+  - [System Overview](#system-overview)
+  - [Indexing Lifecycle](#-indexing-lifecycle)
+  - [Search Ranking System](#-search-ranking-system)
 - [Tech Stack](#-tech-stack)
 - [Getting Started](#-getting-started)
 - [Usage](#-usage)
@@ -118,50 +121,180 @@ SAGE uses **AI-powered semantic understanding** to:
 
 ## 🏗️ Architecture
 
+### System Overview
+
+<p align="center">
+  <img src="screenshots/Sage_architecture.png" alt="SAGE Architecture Diagram" width="900" />
+  <br />
+  <em>📐 Complete system architecture showing the interaction between all SAGE components</em>
+</p>
+
+SAGE follows a **three-tier architecture** designed for complete offline operation while maintaining high performance and modularity:
+
+#### **Presentation Layer (Electron + React)**
+The desktop application is built with Electron, providing a native cross-platform experience. The React 18 frontend communicates exclusively via HTTP REST calls to the local backend, ensuring a clean separation of concerns. The UI features a modern glassmorphic design with smooth animations and responsive layouts.
+
+#### **Application Layer (FastAPI Backend)**
+The Python-based FastAPI server acts as the central orchestrator, handling:
+- **REST API endpoints** for search, indexing, and configuration
+- **Watchdog integration** for real-time file system monitoring
+- **Background task management** for non-blocking indexing operations
+- **SQLite state management** for tracking indexed files and user preferences
+
+#### **Data Layer (Weaviate + SQLite)**
+- **Weaviate Vector Database**: Stores document embeddings for lightning-fast similarity search using HNSW (Hierarchical Navigable Small World) indexing
+- **SQLite**: Lightweight relational database for file hashes, user roots, and indexing state
+- **Sentence Transformers**: The `all-MiniLM-L6-v2` model generates 384-dimensional embeddings optimized for semantic similarity
+
+#### Component Communication
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          SAGE Architecture                               │
-├─────────────────────────────────────────────────────────────────────────┤
-│                                                                          │
-│    ┌─────────────────┐                      ┌─────────────────┐         │
-│    │   Electron App  │◀────── HTTP ────────▶│   FastAPI       │         │
-│    │   (React UI)    │      REST API        │   Backend       │         │
-│    └─────────────────┘                      └────────┬────────┘         │
-│                                                      │                   │
-│                          ┌───────────────────────────┼───────────────┐  │
-│                          │                           │               │  │
-│                          ▼                           ▼               ▼  │
-│                   ┌─────────────┐            ┌─────────────┐  ┌────────┐│
-│                   │   SQLite    │            │  Weaviate   │  │Watchdog││
-│                   │   State DB  │            │  Vectors    │  │Monitor ││
-│                   └─────────────┘            └─────────────┘  └────────┘│
-│                                                      │                   │
-│                                                      ▼                   │
-│                                              ┌─────────────┐            │
-│                                              │  Sentence   │            │
-│                                              │ Transformers│            │
-│                                              │ (MiniLM-L6) │            │
-│                                              └─────────────┘            │
-│                                                                          │
-└─────────────────────────────────────────────────────────────────────────┘
+┌─────────────────┐     HTTP/REST      ┌─────────────────┐
+│   Electron App  │◀──────────────────▶│  FastAPI Server │
+│   (React UI)    │    localhost:8000  │   (Python 3.11) │
+└─────────────────┘                    └────────┬────────┘
+                                                │
+                    ┌───────────────────────────┼───────────────┐
+                    │                           │               │
+                    ▼                           ▼               ▼
+             ┌─────────────┐            ┌─────────────┐  ┌────────────┐
+             │   SQLite    │            │  Weaviate   │  │  Watchdog  │
+             │  State DB   │            │  Vectors    │  │  Observer  │
+             └─────────────┘            └─────────────┘  └────────────┘
 ```
 
-### Data Flow
+---
 
-1. **Indexing Pipeline**
-   ```
-   Files → Text Extraction → Chunking (1000 chars) → Embedding → Weaviate Storage
-   ```
+### 📥 Indexing Lifecycle
 
-2. **Search Pipeline**
-   ```
-   Query → Embedding → Vector Search → Hybrid Scoring → Ranked Results
-   ```
+<p align="center">
+  <img src="screenshots/indexing_sage.png" alt="SAGE Indexing Lifecycle" width="900" />
+  <br />
+  <em>🔄 Complete indexing pipeline from file discovery to vector storage</em>
+</p>
 
-3. **Real-Time Sync**
-   ```
-   File Change → Watchdog Detection → Debounce (3s) → Incremental Re-index
-   ```
+The indexing system is designed for **efficiency and reliability**, processing documents through a multi-stage pipeline:
+
+#### **Stage 1: File Discovery & Validation**
+When indexing is triggered (manually or via Watchdog), SAGE scans all configured root directories recursively:
+- **Supported formats**: `.txt`, `.pdf`, `.docx`, `.pptx`
+- **Skip logic**: Temporary files (`~$*`), hidden files, and system directories are ignored
+- **Hash checking**: SHA-256 file hashes are compared against SQLite cache to identify new or modified files
+
+#### **Stage 2: Text Extraction**
+Each file type has a specialized extractor:
+| Format | Extractor | Features |
+|--------|-----------|----------|
+| **PDF** | PyMuPDF (fitz) | Text-first extraction with OCR fallback for scanned pages |
+| **DOCX** | python-docx | Preserves paragraph structure |
+| **PPTX** | python-pptx | Extracts text from all slides and shapes |
+| **TXT** | Native Python | UTF-8 encoding with fallback to latin-1 |
+
+#### **Stage 3: Intelligent Chunking**
+Documents are split into overlapping chunks for optimal retrieval:
+- **Chunk size**: 1000 characters (configurable)
+- **Overlap**: 100 characters to preserve context across boundaries
+- **Sentence awareness**: Chunks break at sentence boundaries when possible
+
+#### **Stage 4: Embedding Generation**
+The `all-MiniLM-L6-v2` model processes each chunk:
+- **Output**: 384-dimensional dense vector
+- **Speed**: ~100 chunks/second on CPU
+- **Quality**: Optimized for semantic similarity tasks with 33M parameters
+
+#### **Stage 5: Vector Storage**
+Embeddings are stored in Weaviate with metadata:
+```json
+{
+  "vector": [0.023, -0.156, ..., 0.089],  // 384 dimensions
+  "properties": {
+    "file": "document.pdf",
+    "path": "C:\\Documents\\document.pdf",
+    "chunk": "The extracted text content..."
+  }
+}
+```
+
+#### **Incremental Updates**
+SAGE uses **smart caching** to avoid redundant work:
+1. File hash is computed and checked against SQLite
+2. If unchanged, the file is skipped entirely
+3. If modified, old chunks are deleted and new ones are indexed
+4. This reduces re-indexing time from minutes to seconds
+
+---
+
+### 🎯 Search Ranking System
+
+<p align="center">
+  <img src="screenshots/search_ranking_sage.png" alt="SAGE Search Ranking" width="900" />
+  <br />
+  <em>⚡ Hybrid ranking algorithm combining semantic and keyword matching</em>
+</p>
+
+SAGE employs a sophisticated **hybrid ranking system** that combines the best of semantic understanding and traditional keyword matching:
+
+#### **Step 1: Query Processing**
+When a user submits a search query:
+1. The query is embedded using the same `all-MiniLM-L6-v2` model
+2. Query terms are tokenized for keyword matching
+3. Both representations are used in parallel for comprehensive retrieval
+
+#### **Step 2: Vector Similarity Search**
+Weaviate performs approximate nearest neighbor (ANN) search:
+- **Algorithm**: HNSW (Hierarchical Navigable Small World graphs)
+- **Distance metric**: Cosine similarity
+- **Overfetch**: Retrieves `top_k × 10` candidates for post-processing
+- **Speed**: Sub-100ms for millions of vectors
+
+#### **Step 3: Hybrid Score Calculation**
+Each candidate receives a **combined score** using the formula:
+
+```
+Final Score = (Semantic Score × 0.8) + (Keyword Score × 0.2)
+```
+
+| Component | Weight | Description |
+|-----------|--------|-------------|
+| **Semantic Score** | 80% | Cosine similarity between query and chunk embeddings (0.0 to 1.0) |
+| **Keyword Score** | 20% | TF-IDF-style matching with exact term bonuses |
+
+#### **Keyword Score Breakdown**
+The keyword component rewards:
+- **Exact matches**: Full query terms found in chunk text
+- **Filename matches**: Query terms appearing in the document filename (1.5× boost)
+- **Term frequency**: Multiple occurrences of query terms
+
+```python
+keyword_score = (matched_terms / total_terms) + filename_bonus
+```
+
+#### **Step 4: File-Level Deduplication**
+To prevent the same document from dominating results:
+1. All chunks are grouped by source file
+2. Only the **highest-scoring chunk** per file is retained
+3. This ensures diverse results across different documents
+
+#### **Step 5: Query-Aware Snippet Extraction**
+For each result, SAGE extracts the most relevant snippet:
+1. Chunk text is split into sentences
+2. Each sentence is scored against the query embedding
+3. Top 3 most relevant sentences are combined
+4. Matched query terms are highlighted in the UI
+
+#### **Ranking Example**
+For the query "machine learning algorithms":
+
+| Rank | File | Semantic | Keyword | Final | Why? |
+|------|------|----------|---------|-------|------|
+| 1 | `ml_notes.pdf` | 0.89 | 0.75 | **0.86** | Strong semantic + filename match |
+| 2 | `ai_research.docx` | 0.92 | 0.40 | **0.82** | Excellent semantic, weak keyword |
+| 3 | `algorithms.txt` | 0.78 | 0.90 | **0.80** | Good keyword, moderate semantic |
+
+This hybrid approach ensures that:
+- **Conceptually similar** documents rank high even without exact keyword matches
+- **Exact keyword matches** get a boost for precision
+- Results are **diverse** across different files
+- Users see the **most relevant passages** highlighted
 
 ---
 
