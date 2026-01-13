@@ -65,43 +65,109 @@ def calculate_keyword_score(query_terms: List[str], chunk_text: str, filename: s
     return score
 
 
-def extract_query_aware_snippet(query: str, chunk_text: str, query_terms: List[str], max_length: int = 300) -> tuple:
+def split_into_sentences(text: str) -> List[str]:
     """
-    Extract a query-aware snippet from chunk text.
-    Returns the most relevant portion and matched terms.
+    Split text into sentences using common delimiters.
+    Handles abbreviations and edge cases reasonably well.
+    """
+    import re
+    # Split on sentence-ending punctuation followed by space or end
+    # Preserve the punctuation with the sentence
+    sentences = re.split(r'(?<=[.!?])\s+', text)
+    # Filter out very short fragments
+    return [s.strip() for s in sentences if len(s.strip()) > 15]
+
+
+def score_sentence_relevance(sentence: str, query: str, query_terms: List[str], query_embedding) -> float:
+    """
+    Score how relevant a sentence is to the query.
+    Combines semantic similarity with keyword matching.
+    """
+    from sentence_transformers import util
+    
+    sentence_lower = sentence.lower()
+    
+    # Keyword score: what fraction of query terms appear in sentence
+    keyword_hits = sum(1 for term in query_terms if term.lower() in sentence_lower)
+    keyword_score = keyword_hits / len(query_terms) if query_terms else 0
+    
+    # Semantic score: cosine similarity between sentence and query
+    sentence_embedding = model.encode(sentence, convert_to_tensor=True)
+    semantic_score = float(util.cos_sim(query_embedding, sentence_embedding)[0][0])
+    
+    # Combined score: weight semantic higher but boost keyword matches
+    # Semantic: 0.6, Keyword: 0.4 (keywords are strong signals)
+    combined_score = (semantic_score * 0.6) + (keyword_score * 0.4)
+    
+    return combined_score
+
+
+def extract_query_aware_snippet(query: str, chunk_text: str, query_terms: List[str], max_length: int = 350) -> tuple:
+    """
+    Extract the most relevant sentences from a chunk that answer the query.
+    Uses sentence-level semantic + keyword scoring.
+    Returns the best 2-3 sentences and matched terms.
     """
     if not chunk_text:
         return "", []
     
-    # Find matched terms
-    matched_terms = []
+    # Find all matched terms in the chunk
     chunk_lower = chunk_text.lower()
-    for term in query_terms:
-        if term.lower() in chunk_lower:
-            matched_terms.append(term)
+    matched_terms = [term for term in query_terms if term.lower() in chunk_lower]
     
-    # If we have matched terms, try to center snippet around first match
-    if matched_terms:
-        first_match = matched_terms[0].lower()
-        match_pos = chunk_lower.find(first_match)
-        if match_pos != -1:
-            # Center the snippet around the match
-            start = max(0, match_pos - max_length // 2)
-            end = min(len(chunk_text), start + max_length)
-            snippet = chunk_text[start:end].strip()
-            
-            # Add ellipsis if truncated
-            if start > 0:
-                snippet = "..." + snippet
-            if end < len(chunk_text):
-                snippet = snippet + "..."
-            
-            return snippet, matched_terms
+    # Split chunk into sentences
+    sentences = split_into_sentences(chunk_text)
     
-    # Fallback: return beginning of chunk
-    snippet = chunk_text[:max_length].strip()
-    if len(chunk_text) > max_length:
-        snippet += "..."
+    # If no sentences found or very short text, return as-is
+    if not sentences or len(chunk_text) < 100:
+        snippet = chunk_text[:max_length].strip()
+        if len(chunk_text) > max_length:
+            snippet += "..."
+        return snippet, matched_terms
+    
+    # Pre-compute query embedding once
+    query_embedding = model.encode(query, convert_to_tensor=True)
+    
+    # Score each sentence
+    scored_sentences = []
+    for sentence in sentences:
+        score = score_sentence_relevance(sentence, query, query_terms, query_embedding)
+        scored_sentences.append((score, sentence))
+    
+    # Sort by relevance score (highest first)
+    scored_sentences.sort(key=lambda x: x[0], reverse=True)
+    
+    # Take top sentences until we hit max_length
+    selected = []
+    current_length = 0
+    for score, sentence in scored_sentences:
+        if current_length + len(sentence) > max_length and selected:
+            break
+        selected.append((score, sentence))
+        current_length += len(sentence) + 1  # +1 for space
+        # Max 3 sentences
+        if len(selected) >= 3:
+            break
+    
+    # Re-order selected sentences by their original position in the text
+    # This preserves logical flow
+    sentence_positions = {s: chunk_text.find(s) for _, s in selected}
+    selected.sort(key=lambda x: sentence_positions.get(x[1], 0))
+    
+    # Build final snippet
+    snippet_parts = [s for _, s in selected]
+    snippet = " ".join(snippet_parts)
+    
+    # Add context indicators
+    first_pos = sentence_positions.get(selected[0][1], 0) if selected else 0
+    if first_pos > 50:
+        snippet = "..." + snippet
+    if selected and sentence_positions.get(selected[-1][1], 0) + len(selected[-1][1]) < len(chunk_text) - 50:
+        snippet = snippet + "..."
+    
+    # Update matched_terms to only include terms actually in the snippet
+    snippet_lower = snippet.lower()
+    matched_terms = [term for term in matched_terms if term.lower() in snippet_lower]
     
     return snippet, matched_terms
 
