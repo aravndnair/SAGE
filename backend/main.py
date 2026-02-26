@@ -1,6 +1,10 @@
+import os
+
+# Set offline mode for HuggingFace before any transformers imports
+os.environ["HF_HUB_OFFLINE"] = "1"
+
 import traceback
 import sys
-import os
 import sqlite3
 import threading
 from contextlib import asynccontextmanager
@@ -16,6 +20,7 @@ from watchdog.events import FileSystemEventHandler
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from search import semantic_search
+from search import invalidate_vocabulary
 import index_docs
 
 # =========================
@@ -40,19 +45,19 @@ WATCHDOG_DEBOUNCE_SECONDS = 3  # Minimum seconds between indexing triggers
 async def lifespan(app: FastAPI):
     """Modern lifespan handler for startup/shutdown events"""
     # === STARTUP ===
-    print("🔵 Initializing SAGE backend...")
+    print("[INIT] Initializing SAGE backend...")
     # Ensure database tables exist
     index_docs.init_db()
     # Clean up any duplicate roots from previous runs
     cleanup_duplicate_roots()
     # Start watchdog monitoring
     start_watchdog()
-    print("✅ Backend ready")
+    print("[DONE] Backend ready")
     
     yield  # App runs here
     
     # === SHUTDOWN ===
-    print("🔻 Shutting down SAGE backend...")
+    print("[STOP] Shutting down SAGE backend...")
     stop_watchdog()
 
 
@@ -188,12 +193,15 @@ def run_indexing_background():
         return
     
     try:
+        # Reset progress before starting
+        index_docs.reset_progress()
         indexing_in_progress = True
-        print("🔵 Starting indexing...")
+        print("[START] Starting indexing...")
         index_docs.main()
-        print("✅ Indexing complete")
+        invalidate_vocabulary()  # Refresh fuzzy-match vocabulary after indexing
+        print("[DONE] Indexing complete")
     except Exception as e:
-        print(f"❌ Indexing error: {e}")
+        print(f"[ERROR] Indexing error: {e}")
         traceback.print_exc()
     finally:
         indexing_in_progress = False
@@ -249,11 +257,11 @@ class SageEventHandler(FileSystemEventHandler):
         
         # Debounce: skip if triggered too recently
         if current_time - last_watchdog_trigger < WATCHDOG_DEBOUNCE_SECONDS:
-            print(f"📡 Watchdog: {action.upper()} - {filename} (debounced)")
+            print(f"[WATCHDOG] {action.upper()} - {filename} (debounced)")
             return
         
         last_watchdog_trigger = current_time
-        print(f"📡 Watchdog: {action.upper()} - {path}")
+        print(f"[WATCHDOG] {action.upper()} - {path}")
         # Run indexing in background to avoid blocking
         threading.Thread(target=run_indexing_background, daemon=True).start()
 
@@ -264,11 +272,11 @@ def start_watchdog():
     
     roots = get_user_roots()
     if not roots:
-        print("⚠️ No user roots configured. Watchdog will start after roots are added.")
+        print("[WARN] No user roots configured. Watchdog will start after roots are added.")
         return
     
     if watchdog_observer is not None:
-        print("⚠️ Watchdog already running")
+        print("[WARN] Watchdog already running")
         return
     
     try:
@@ -278,11 +286,11 @@ def start_watchdog():
         for root in roots:
             if not os.path.exists(root):
                 continue
-            print(f"👀 Watching: {root}")
+            print(f"[WATCH] Watching: {root}")
             watchdog_observer.schedule(handler, root, recursive=True)
         
         watchdog_observer.start()
-        print("✅ Watchdog monitoring active")
+        print("[DONE] Watchdog monitoring active")
     except Exception as e:
         print(f"❌ Failed to start watchdog: {e}")
         watchdog_observer = None
@@ -413,6 +421,39 @@ async def get_status():
             "indexing": indexing_in_progress,
             "roots_count": 0,
             "files_indexed": 0
+        }
+
+
+@app.get("/index/progress")
+async def get_indexing_progress():
+    """Get detailed indexing progress for progress bar"""
+    try:
+        progress = index_docs.indexing_progress
+        total = progress.get("total_files", 0)
+        processed = progress.get("processed_files", 0)
+        
+        # Calculate percentage
+        percentage = 0
+        if total > 0:
+            percentage = round((processed / total) * 100, 1)
+        
+        return {
+            "indexing": indexing_in_progress,
+            "phase": progress.get("phase", "idle"),
+            "total_files": total,
+            "processed_files": processed,
+            "current_file": progress.get("current_file", ""),
+            "percentage": percentage
+        }
+    except Exception as e:
+        print(f"❌ Error getting progress: {e}")
+        return {
+            "indexing": indexing_in_progress,
+            "phase": "unknown",
+            "total_files": 0,
+            "processed_files": 0,
+            "current_file": "",
+            "percentage": 0
         }
 
 

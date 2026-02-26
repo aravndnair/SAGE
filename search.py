@@ -1,10 +1,15 @@
 import time
 import re
+import os
+import difflib
+
+# Set offline mode for HuggingFace before importing transformers
+os.environ["HF_HUB_OFFLINE"] = "1"
+
 from sentence_transformers import SentenceTransformer, util
 import weaviate
 import sqlite3
-import os
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Set
 
 # ---------------- CONFIG ----------------
 
@@ -22,6 +27,10 @@ FETCH_BUFFER = 10         # Fetch top_k * FETCH_BUFFER for deduplication
 MAX_SNIPPET_SENTENCES = 3    # Max sentences to include in snippet
 MIN_SENTENCE_LENGTH = 20     # Ignore very short sentences
 SENTENCE_SCORE_THRESHOLD = 0.3  # Min relevance score to include sentence
+
+# Fuzzy / Typo Tolerance Configuration
+FUZZY_MATCH_THRESHOLD = 0.75   # Min similarity ratio for fuzzy keyword match (0-1)
+MIN_WORD_LENGTH_FOR_FUZZY = 4  # Don't fuzzy-match very short words
 
 # --------------------------------------
 
@@ -67,6 +76,81 @@ def get_collection():
 # -----------------------------------
 
 
+# -------- VOCABULARY CACHE --------
+
+_vocabulary: Optional[Set[str]] = None
+
+def get_vocabulary() -> Set[str]:
+    """
+    Build a vocabulary set from all indexed chunks.
+    Cached after first call. Used for fuzzy spell correction.
+    """
+    global _vocabulary
+    if _vocabulary is not None:
+        return _vocabulary
+
+    try:
+        collection = get_collection()
+        vocab = set()
+        for obj in collection.iterator():
+            chunk = obj.properties.get("chunk", "")
+            filename = obj.properties.get("file", "")
+            # Extract words from chunk and filename
+            words = re.findall(r'[a-zA-Z]{3,}', chunk)
+            words += re.findall(r'[a-zA-Z]{3,}', filename)
+            vocab.update(w.lower() for w in words)
+        _vocabulary = vocab
+        print(f"[VOCAB] Built vocabulary: {len(vocab)} unique words")
+    except Exception as e:
+        print(f"[VOCAB] Failed to build vocabulary: {e}")
+        _vocabulary = set()
+    return _vocabulary
+
+
+def invalidate_vocabulary():
+    """Call this after re-indexing to refresh the vocabulary."""
+    global _vocabulary
+    _vocabulary = None
+
+
+def correct_query(query: str) -> str:
+    """
+    Attempt to correct misspelled words in the query using the indexed vocabulary.
+    Uses difflib.get_close_matches for fast offline fuzzy matching.
+    Returns the corrected query string.
+    """
+    vocab = get_vocabulary()
+    if not vocab:
+        return query  # No vocabulary yet, return as-is
+
+    vocab_list = list(vocab)  # get_close_matches needs a list
+    words = query.split()
+    corrected = []
+
+    for word in words:
+        lower = word.lower()
+        # Skip short words or words already in the vocabulary
+        if len(lower) < MIN_WORD_LENGTH_FOR_FUZZY or lower in vocab:
+            corrected.append(word)
+            continue
+
+        matches = difflib.get_close_matches(
+            lower, vocab_list, n=1, cutoff=FUZZY_MATCH_THRESHOLD
+        )
+        if matches:
+            # Preserve original casing style
+            replacement = matches[0]
+            if word[0].isupper():
+                replacement = replacement.capitalize()
+            corrected.append(replacement)
+            if replacement.lower() != lower:
+                print(f"[FUZZY] '{word}' → '{replacement}'")
+        else:
+            corrected.append(word)
+
+    return ' '.join(corrected)
+
+
 def load_db_roots() -> List[str]:
     conn = sqlite3.connect(INDEX_DB, timeout=30)
     cur = conn.cursor()
@@ -76,10 +160,29 @@ def load_db_roots() -> List[str]:
     return roots
 
 
+def fuzzy_term_in_text(term: str, text_lower: str, threshold: float = FUZZY_MATCH_THRESHOLD) -> bool:
+    """
+    Check if a term (or a close fuzzy match) appears in the text.
+    First checks exact substring, then falls back to fuzzy word matching.
+    """
+    if term in text_lower:
+        return True
+    # Only do fuzzy matching for longer terms
+    if len(term) < MIN_WORD_LENGTH_FOR_FUZZY:
+        return False
+    # Check each word in the text for a close match
+    text_words = set(re.findall(r'[a-z]{3,}', text_lower))
+    for w in text_words:
+        ratio = difflib.SequenceMatcher(None, term, w).ratio()
+        if ratio >= threshold:
+            return True
+    return False
+
+
 def calculate_keyword_score(query_terms: List[str], chunk_text: str, filename: str) -> float:
     """
     Calculate keyword match score (0.0 to 1.0) based on query term presence.
-    Checks both chunk text and filename.
+    Checks both chunk text and filename. Includes fuzzy matching for typos.
     Bounded to prevent overpowering semantic score.
     """
     if not query_terms:
@@ -91,9 +194,9 @@ def calculate_keyword_score(query_terms: List[str], chunk_text: str, filename: s
     matches = 0
     for term in query_terms:
         term_lower = term.lower()
-        if term_lower in chunk_lower:
+        if fuzzy_term_in_text(term_lower, chunk_lower):
             matches += 1
-        if term_lower in filename_lower:
+        if fuzzy_term_in_text(term_lower, filename_lower):
             matches += 0.5  # Filename match weighted less than chunk match
     
     # Normalize: max possible score is len(query_terms) * 1.5
@@ -235,7 +338,14 @@ def semantic_search(
     """
     Semantic search with file-level deduplication and optional hybrid scoring.
     Returns top_k FILES (not chunks), each with their best matching chunk.
+    Includes fuzzy spell correction for typo tolerance.
     """
+
+    # ---- Fuzzy spell correction ----
+    original_query = query
+    query = correct_query(query)
+    if query != original_query:
+        print(f"[SEARCH] Corrected query: '{original_query}' → '{query}'")
 
     # ---- Resolve effective roots ----
     if roots is None:

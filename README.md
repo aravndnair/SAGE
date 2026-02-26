@@ -109,6 +109,8 @@ SAGE uses **AI-powered semantic understanding** to:
 | 🚀 **Incremental Indexing** | Smart caching skips unchanged files for fast re-indexing |
 | 🖼️ **OCR Support** | Extract text from scanned PDFs using Tesseract OCR |
 | 🎨 **Modern UI** | Beautiful glassmorphic Electron desktop application |
+| ✏️ **Typo Tolerance** | Fuzzy spell correction using indexed vocabulary — misspelled queries still find results |
+| ✈️ **Fully Offline** | HuggingFace offline mode ensures zero network requests after initial model download |
 
 ### Privacy & Security
 
@@ -235,9 +237,10 @@ SAGE employs a sophisticated **hybrid ranking system** that combines the best of
 
 #### **Step 1: Query Processing**
 When a user submits a search query:
-1. The query is embedded using the same `all-MiniLM-L6-v2` model
-2. Query terms are tokenized for keyword matching
-3. Both representations are used in parallel for comprehensive retrieval
+1. **Fuzzy spell correction** — misspelled words are matched against the indexed vocabulary using `difflib` and auto-corrected (e.g. `"compiter"` → `"computer"`)
+2. The corrected query is embedded using the same `all-MiniLM-L6-v2` model
+3. Query terms are tokenized for keyword matching (with fuzzy matching for typos)
+4. Both representations are used in parallel for comprehensive retrieval
 
 #### **Step 2: Vector Similarity Search**
 Weaviate performs approximate nearest neighbor (ANN) search:
@@ -256,7 +259,7 @@ Final Score = (Semantic Score × 0.8) + (Keyword Score × 0.2)
 | Component | Weight | Description |
 |-----------|--------|-------------|
 | **Semantic Score** | 80% | Cosine similarity between query and chunk embeddings (0.0 to 1.0) |
-| **Keyword Score** | 20% | TF-IDF-style matching with exact term bonuses |
+| **Keyword Score** | 20% | Fuzzy keyword matching with exact term bonuses |
 
 #### **Keyword Score Breakdown**
 The keyword component rewards:
@@ -508,6 +511,17 @@ SEMANTIC_WEIGHT = 0.8    # Weight for semantic similarity (0-1)
 KEYWORD_WEIGHT = 0.2     # Weight for keyword matching (0-1)
 ```
 
+### Fuzzy / Typo Tolerance
+
+Edit `search.py` to adjust typo correction sensitivity:
+
+```python
+FUZZY_MATCH_THRESHOLD = 0.75   # Min similarity ratio for fuzzy keyword match (0.0-1.0)
+MIN_WORD_LENGTH_FOR_FUZZY = 4  # Don't fuzzy-match very short words
+```
+
+> **Note:** The vocabulary for spell correction is built automatically from your indexed documents. It refreshes after each re-index.
+
 ### Indexing Configuration
 
 Edit `index_docs.py` to customize chunking:
@@ -614,6 +628,10 @@ pip install "numpy<2"
 - [x] OCR for scanned documents
 - [x] Incremental indexing
 - [x] Multi-directory support (up to 5)
+- [x] Fully offline mode (HuggingFace offline, no network required)
+- [x] Fuzzy typo-tolerant search with vocabulary-based spell correction
+- [x] Adaptive UI polling (fast during indexing, slow when idle)
+- [x] Custom app icon and clean window chrome (no default Electron menu)
 
 ### Planned 🚧
 
@@ -622,7 +640,6 @@ pip install "numpy<2"
 - [ ] Advanced search filters (date, type, folder)
 - [ ] In-app file preview
 - [ ] Search history persistence
-- [ ] Indexing progress bar in UI
 - [ ] Auto-updater
 - [ ] macOS and Linux builds
 - [ ] Installer packages (.exe, .dmg, .AppImage)

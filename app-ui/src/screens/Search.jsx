@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { getRoots, searchFiles } from '../api/backend';
+import { getIndexingProgress, getRoots, searchFiles } from '../api/backend';
 import ResultCard from '../components/ResultCard';
 import SearchBar from '../components/SearchBar';
 import { SCREENS, useApp } from '../state/appState';
@@ -13,11 +13,58 @@ export default function Search() {
   const [localQuery, setLocalQuery] = useState('');
   const [routesLoading, setRoutesLoading] = useState(true);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [indexingProgress, setIndexingProgress] = useState(null);
   const inputRef = useRef(null);
   const scrollRef = useRef(null);
 
   useEffect(() => {
     loadRoutes();
+  }, []);
+
+  // Poll for indexing progress
+  useEffect(() => {
+    let interval = null;
+    let isMounted = true;
+    
+    const pollProgress = async () => {
+      if (!isMounted) return;
+      try {
+        const progress = await getIndexingProgress();
+        if (!isMounted) return;
+        setIndexingProgress(progress);
+        
+        if (progress.indexing) {
+          console.log('📚 Indexing in progress:', progress);
+          // Poll fast during active indexing
+          scheduleNext(1000);
+        } else if (progress.phase === 'complete') {
+          // Indexing just finished — show for 3s then hide
+          setTimeout(() => { if (isMounted) setIndexingProgress(null); }, 3000);
+          // Slow poll after completion
+          scheduleNext(5000);
+        } else {
+          // Idle — slow poll to detect when indexing starts
+          scheduleNext(5000);
+        }
+      } catch (error) {
+        console.error('Failed to fetch indexing progress:', error);
+        // Retry slowly on error
+        scheduleNext(5000);
+      }
+    };
+
+    const scheduleNext = (delay) => {
+      if (interval) clearTimeout(interval);
+      interval = setTimeout(pollProgress, delay);
+    };
+
+    // Initial poll
+    pollProgress();
+
+    return () => {
+      isMounted = false;
+      if (interval) clearTimeout(interval);
+    };
   }, []);
 
   useEffect(() => {
@@ -169,6 +216,35 @@ export default function Search() {
             isSearching={isSearching}
           />
         </div>
+
+        {/* Indexing Progress Bar */}
+        {indexingProgress && indexingProgress.indexing && (
+          <div className="indexing-progress-container animate-fade-in-up">
+            <div className="indexing-progress-card">
+              <div className="indexing-progress-header">
+                <span className="indexing-progress-icon">[*]</span>
+                <span className="indexing-progress-label">
+                  {indexingProgress.phase === 'indexing' ? 'Indexing files...' : 'Preparing...'}
+                </span>
+                <span className="indexing-progress-percent">{indexingProgress.percentage}%</span>
+              </div>
+              <div className="indexing-progress-bar-track">
+                <div 
+                  className="indexing-progress-bar-fill"
+                  style={{ width: `${indexingProgress.percentage}%` }}
+                />
+              </div>
+              <div className="indexing-progress-details">
+                <span className="indexing-progress-file" title={indexingProgress.current_file}>
+                  {indexingProgress.current_file ? `Processing: ${indexingProgress.current_file}` : 'Starting...'}
+                </span>
+                <span className="indexing-progress-count">
+                  {indexingProgress.processed_files} / {indexingProgress.total_files} files
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
 
         <section className={`search-results ${isScrolled ? 'is-scrolled' : ''}`} aria-label="Search results">
           <div 

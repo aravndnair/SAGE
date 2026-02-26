@@ -1,11 +1,15 @@
-const { app, BrowserWindow, ipcMain, shell, dialog } = require("electron");
+const { app, BrowserWindow, ipcMain, shell, dialog, Menu } = require("electron");
 const path = require("path");
 
 function createWindow() {
+  // Remove the default menu bar (File, Edit, View, Window, Help)
+  Menu.setApplicationMenu(null);
+
   const win = new BrowserWindow({
     width: 1100,
     height: 750,
     backgroundColor: "#f2f2f7",
+    icon: path.join(__dirname, "assets", "SageNoBG.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
     },
@@ -46,6 +50,7 @@ ipcMain.handle("trigger-reindex", async () => {
   fetch("http://127.0.0.1:8000/reindex", { method: "POST" });
   return { status: "ok" };
 });
+app.setName("SAGE");
 
 app.whenReady().then(createWindow);
 

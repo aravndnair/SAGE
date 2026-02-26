@@ -5,6 +5,9 @@ import sqlite3
 import io
 from typing import List
 
+# Set offline mode for HuggingFace before importing transformers
+os.environ["HF_HUB_OFFLINE"] = "1"
+
 from sentence_transformers import SentenceTransformer
 import weaviate
 from weaviate.collections.classes.config import Property, DataType, Configure
@@ -23,6 +26,16 @@ CLASS_NAME = "Documents"
 INDEX_DB = "index_state.db"
 
 ALLOWED_EXT = (".txt", ".pdf", ".docx", ".ppt", ".pptx")
+
+# ---------------- PROGRESS TRACKING ----------------
+
+# Global progress state (thread-safe access via main.py)
+indexing_progress = {
+    "total_files": 0,
+    "processed_files": 0,
+    "current_file": "",
+    "phase": "idle"  # idle, scanning, indexing, complete
+}
 
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 200
@@ -230,11 +243,16 @@ def main():
     roots = load_user_roots(cur)
     if not roots:
         print("[WARN] No user roots configured. Indexer exiting.")
+        reset_progress()  # Reset on exit
         conn.close()
         client.close()
         return
 
     print(f"[INFO] Using {len(roots)} user-defined roots")
+    
+    # Mark as scanning phase
+    indexing_progress["phase"] = "scanning"
+    indexing_progress["current_file"] = "Scanning files..."
 
     all_files = set()
     for root in roots:
@@ -269,14 +287,23 @@ def main():
     print(f"[INFO] New/changed files: {len(to_index)}")
     print(f"[INFO] Deleted files: {len(deleted)}")
 
+    # Update progress tracking
+    indexing_progress["total_files"] = len(to_index)
+    indexing_progress["processed_files"] = 0
+    indexing_progress["phase"] = "indexing"
+
     for path in deleted:
         collection.data.delete_many(
             where=Filter.by_property("path").equal(path)
         )
         cur.execute("DELETE FROM indexed_files WHERE path=?", (path,))
 
-    for path in to_index:
-        print(f"[INDEX] Processing: {os.path.basename(path)}")
+    for idx, path in enumerate(to_index, start=1):
+        # Update progress (1-indexed)
+        indexing_progress["current_file"] = os.path.basename(path)
+        indexing_progress["processed_files"] = idx
+        
+        print(f"[INDEX] Processing: {os.path.basename(path)} ({idx}/{len(to_index)})")
         text = extract_text(path)
         if not text.strip():
             print(f"[WARN] No text extracted from {os.path.basename(path)}")
@@ -314,7 +341,20 @@ def main():
     conn.close()
     client.close()
 
+    # Update progress to complete
+    indexing_progress["processed_files"] = indexing_progress["total_files"]
+    indexing_progress["current_file"] = ""
+    indexing_progress["phase"] = "complete"
+
     print("[DONE] Indexing complete")
+
+
+def reset_progress():
+    """Reset progress state to idle"""
+    indexing_progress["total_files"] = 0
+    indexing_progress["processed_files"] = 0
+    indexing_progress["current_file"] = ""
+    indexing_progress["phase"] = "idle"
 
 
 if __name__ == "__main__":

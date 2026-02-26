@@ -1,13 +1,17 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require("electron");
 const path = require("path");
 
 let win = null;
 
 function createWindow() {
+    // Remove the default menu bar (File, Edit, View, Window, Help)
+    Menu.setApplicationMenu(null);
+
     win = new BrowserWindow({
         width: 1200,
         height: 800,
         backgroundColor: "#f5f5f7",
+        icon: path.join(__dirname, "assets", "SageNoBG.png"),
         webPreferences: {
             preload: path.join(__dirname, "preload.js"),
             contextIsolation: true,
@@ -17,10 +21,8 @@ function createWindow() {
     });
 
     win.loadFile(path.join(__dirname, "dist", "index.html"));
-    
-    // Open DevTools in development
-    win.webContents.openDevTools();
 }
+app.setName("SAGE");
 
 app.whenReady().then(() => {
     createWindow();
