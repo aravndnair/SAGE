@@ -11,7 +11,7 @@ function createWindow() {
         width: 1200,
         height: 800,
         backgroundColor: "#f5f5f7",
-        icon: path.join(__dirname, "assets", "SageNoBG.png"),
+        icon: path.join(__dirname, "assets", "Sage text.png"),
         webPreferences: {
             preload: path.join(__dirname, "preload.js"),
             contextIsolation: true,

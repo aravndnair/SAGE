@@ -9,7 +9,7 @@ function createWindow() {
     width: 1100,
     height: 750,
     backgroundColor: "#f2f2f7",
-    icon: path.join(__dirname, "assets", "SageNoBG.png"),
+    icon: path.join(__dirname, "assets", "Sage text.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
     },
