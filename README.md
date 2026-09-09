@@ -1,8 +1,8 @@
 # SAGE
 
-Semantic Analysis and Guided Exploration (SAGE) is a fully local desktop semantic search system.
+## Semantic Analysis and Guided Exploration (SAGE) is a fully local desktop semantic search system.
 
-This README is a full technical reference of the current codebase. It is intentionally detailed and based on the files that exist in this repository right now.
+
 
 ## 1. What SAGE Is
 
