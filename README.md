@@ -4,7 +4,7 @@
 
 
 
-## 1. What SAGE Is
+## 1. What is SAGE
 
 SAGE indexes local documents into vector embeddings and lets users search by meaning.
 
